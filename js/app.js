@@ -123,7 +123,10 @@
       } else if (opts.mode === 'point') {
         g.fillStyle = '#ffffff'; g.textBaseline = 'bottom';
         c.data.datasets.forEach((ds, di) => c.getDatasetMeta(di).data.forEach((el, i) => {
-          if (ds.data[i] != null) halo(fmtN(ds.data[i]), el.x, el.y - 6);
+          if (ds.data[i] == null) return;
+          const below = i % 2 === 1;                  // alternate: above, below, above, …
+          g.textBaseline = below ? 'top' : 'bottom';
+          halo(fmtN(ds.data[i]), el.x, below ? el.y + 6 : el.y - 6);
         }));
       } else if (opts.mode === 'end') {
         g.fillStyle = '#ffffff'; g.textAlign = 'left'; g.textBaseline = 'middle';
@@ -252,7 +255,7 @@
       type: 'bar',
       data: { labels, datasets: machineNames.map((m, i) => ({ label: m, data: gap(d.machines[m].patients), backgroundColor: MACHINE_COLORS[i % MACHINE_COLORS.length], borderRadius: 3 })) },
       options: { maintainAspectRatio: false, layout: { padding: { top: 16 } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
-        plugins: { legend: { position: 'bottom', labels: { boxWidth: 9, boxHeight: 9, padding: 6, font: { size: 11 } } }, valueLabels: { mode: 'stack' } } }
+        plugins: { legend: { position: 'bottom', align: 'start', labels: { boxWidth: 8, boxHeight: 8, padding: 5, font: { size: 10.5 } } }, valueLabels: { mode: 'stack' } } }
     });
     chart($('#c-sittings'), {
       type: 'line',
