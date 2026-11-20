@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UNITY — RCC Thiruvananthapuram</title>
+  <meta name="description" content="UNITY: Monthly radiotherapy treatment tracking, Division of Radiation Physics, Regional Cancer Centre, Thiruvananthapuram.">
+  <meta name="theme-color" content="#0C343D">
+  <link rel="icon" href="assets/logo.jpg">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Login -->
+  <div id="login-view" class="login-wrap" hidden>
+    <form class="login" id="login-form" autocomplete="off">
+      <img src="assets/logo.jpg" alt="Regional Cancer Centre, Thiruvananthapuram logo">
+      <h1>UNITY</h1>
+      <p>Monthly RT Treatment Tracker<br>Division of Radiation Physics, RCC Thiruvananthapuram</p>
+      <div class="field">
+        <label for="login-key">Access key</label>
+        <input id="login-key" type="password" required autocomplete="current-password">
+      </div>
+      <div class="field" style="flex-direction:row;align-items:center;gap:8px">
+        <input id="login-remember" type="checkbox" style="width:auto;min-height:0" checked>
+        <label for="login-remember" style="font-size:13px">Remember on this device</label>
+      </div>
+      <button class="btn primary" type="submit" id="login-btn">Sign in</button>
+      <p id="login-error" style="color:#ff8aa0;margin-top:12px" hidden></p>
+    </form>
+  </div>
+
+  <!-- App -->
+  <div id="app-view" hidden>
+    <header class="topbar">
+      <img src="assets/logo.jpg" alt="RCC logo">
+      <div class="brand"><b>UNITY</b><small id="dept-line">Division of Radiation Physics, RCC Thiruvananthapuram</small></div>
+      <div class="spacer"></div>
+      <span class="role-badge" id="role-badge"></span>
+      <button class="btn small" id="logout-btn" type="button">Sign out</button>
+    </header>
+    <nav class="tabs" id="tabs">
+      <a href="#/dashboard" data-view="dashboard">Dashboard</a>
+      <a href="#/entry" data-view="entry">New entry</a>
+      <a href="#/status" data-view="status">Submission status</a>
+      <a href="#/entries" data-view="entries">Entries</a>
+      <a href="#/monthly" data-view="monthly">Monthly report</a>
+      <a href="#/annual" data-view="annual">Annual report</a>
+      <a href="#/admin" data-view="admin" class="admin-only">Admin</a>
+    </nav>
+    <main id="main"><div class="loading">Loading…</div></main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <dialog id="confirm-dialog">
+    <h3 id="confirm-title">Confirm</h3>
+    <p id="confirm-text"></p>
+    <div class="actions">
+      <button class="btn" value="cancel" id="confirm-cancel" type="button">Cancel</button>
+      <button class="btn primary" value="ok" id="confirm-ok" type="button">OK</button>
+    </div>
+  </dialog>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
