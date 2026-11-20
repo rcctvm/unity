@@ -1,4 +1,4 @@
-/* UNITY — colour pattern taken from the legacy "Monthly RT Tx Report" sheet:
+/* UNITY — colour pattern taken from the legacy "Monthly RT Tx Report":
    dark teal canvas (#0C343D), black data cells, white text, cyan headings (#00FFFF),
    yellow highlights (#FFFF00), plus RCC red from the logo. */
 :root {
@@ -151,7 +151,7 @@ td.code { color: var(--muted); }
 td.grand { color: var(--yellow); font-weight: 700; }
 th.machine { text-align: center; border-bottom: 2px solid var(--cyan); }
 tr.clickable { cursor: pointer; }
-/* Report grids: alternate machines in black / dark teal, as in the old Google Sheet. */
+/* Report grids: alternate machines in black / dark teal, as in the legacy report. */
 .report-grid tbody td.m-alt { background: var(--teal); }
 .report-grid tr.total td.m-alt { background: #0e3d47; }
 .report-grid tr.meta td.m-alt { background: #082c33; }

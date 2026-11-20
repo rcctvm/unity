@@ -1,5 +1,5 @@
-/* Minimal client for the UNITY Apps Script API.
- * text/plain POST avoids a CORS pre-flight, which Apps Script cannot answer. */
+/* Minimal client for the UNITY server API.
+ * text/plain POST avoids a CORS pre-flight request, which the server does not answer. */
 (function () {
   const TOKEN_STORE = 'unity.token';
   try { localStorage.removeItem('unity.key'); sessionStorage.removeItem('unity.key'); } catch (e) {} // old shared keys

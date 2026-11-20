@@ -2,18 +2,19 @@
 
 Monthly radiotherapy treatment tracker for the **Division of Radiation Physics, Regional Cancer Centre, Thiruvananthapuram**.
 
-This public repo is the website, served by GitHub Pages. The data and logic live in a private Google Apps Script backend (`rcctvm/unity-code`), which stores everything in the UNITY Google Sheet. This site holds no data and no keys.
+This repository contains the UNITY web application, published with GitHub Pages. It holds no patient data and no credentials; all data is stored and served by the UNITY server, whose code is kept in a private repository.
 
 ## Features
 * **Dashboard**: yearly patients, sittings and down time, with charts by machine and technique
-* **New entry**: monthly figures per machine and shift. It replaces the Google Form, guards against duplicates and totals patients live.
-* **Submission status**: which machine/shift reports are received or pending for a month
-* **Entries**: browse, edit and export CSV (admins can delete)
-* **Monthly report** and **Annual report** (calendar or financial year): same layout as the legacy sheet, printable to PDF
-* **Admin**: machines and shifts, shift-in-charge list, workload, and a read-only import from the legacy sheet
+* **Submission status**: which machine and shift reports have been received or are pending for a month
+* **Entries**: browse, correct and export to CSV (admins can delete)
+* **Monthly report** and **Annual report** (calendar or financial year), printable to PDF
+* **New entry**: monthly figures per machine and shift, with duplicate protection (can be shown or hidden in Settings)
+* **Settings**: display preferences, user accounts, data sources and import, storage capacity, machines, staff and workload
+* **Help**: user manual, inside the application
 
 ## Configuration
-Set the Apps Script web-app URL in [`js/config.js`](js/config.js). It never changes after setup, because the backend CI redeploys the same deployment.
+The server address is set in [`js/config.js`](js/config.js). It does not change between releases.
 
 ## Deployment
-Every push to `main` publishes the site through GitHub Actions (`.github/workflows/pages.yml`). One-time step: Settings → Pages → Source: **GitHub Actions**.
+Every push to `main` publishes the site automatically through GitHub Actions (`.github/workflows/pages.yml`).

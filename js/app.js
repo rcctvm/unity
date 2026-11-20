@@ -465,7 +465,7 @@
 
   // ---------- Report grid (monthly & annual share it) ----------
   function reportGrid(r, opts = {}) {
-    // Alternate machines get a different shade (black / dark teal, as in the old Google Sheet).
+    // Alternate machines get a different shade (black / dark teal), as in the legacy report.
     const machines = [];
     r.columns.forEach((c) => { const last = machines[machines.length - 1]; if (last && last.name === c.machine) last.span++; else machines.push({ name: c.machine, span: 1 }); });
     const mIdx = r.columns.map((c) => machines.findIndex((m) => m.name === c.machine));
@@ -654,11 +654,11 @@
             </form>
           </dialog>`, 'Loading…')}
       ${sect('sources', 'Data sources &amp; import', `
-        <p class="note">The old “Monthly RT Tx Report” Google Sheets that UNITY copies data from. UNITY <b>only reads</b> them.
-          For a yearly sheet enter its <b>Year</b>; leave Year empty for the live sheet (the year is then taken from each submission’s date).
-          The first submission per machine/shift/month is used (same as the old sheets). Entries created or edited in UNITY are never overwritten. Importing again never creates duplicates.</p>
+        <p class="note">The legacy “Monthly RT Tx Report” sources that UNITY imports data from. UNITY <b>only reads</b> them and never changes them.
+          For a yearly report, enter its <b>Year</b>; leave Year empty for the current report (the year is then taken from each submission’s date).
+          The first submission per machine, shift and month is used, as in the legacy reports. Entries created or edited in UNITY are never overwritten, and importing again never creates duplicates.</p>
         <div class="table-wrap"><table id="src-table" class="fit">
-          <thead><tr><th style="width:20%">Label</th><th style="width:26%">Spreadsheet ID or URL</th><th style="width:8%">Year</th><th style="width:7%">Hourly sync</th><th style="width:6%">Active</th><th>Last import</th><th style="width:72px"></th><th style="width:44px"></th></tr></thead>
+          <thead><tr><th style="width:20%">Label</th><th style="width:26%">Source link</th><th style="width:8%">Year</th><th style="width:7%">Hourly sync</th><th style="width:6%">Active</th><th>Last import</th><th style="width:72px"></th><th style="width:44px"></th></tr></thead>
           <tbody><tr><td colspan="8" class="loading">Loading…</td></tr></tbody></table></div>
         <div class="actions">
           <button class="btn" id="src-add" type="button">+ Add source</button>
@@ -667,11 +667,11 @@
         </div>
         <pre id="src-out" class="note" style="white-space:pre-wrap;margin:10px 0 0"></pre>`, 'Loading…')}
       ${sect('sync', 'Hourly sync from Google Form', `
-          <p class="note">Every hour, re-reads the sources marked <b>Hourly sync</b> (normally the live sheet) so Google Form submissions appear in UNITY.</p>
+          <p class="note">Every hour, UNITY re-reads the sources marked <b>Hourly sync</b> (normally the current report) so that new Google Form submissions appear in UNITY.</p>
           <p>Status: <b id="adm-sync-status">checking…</b></p>
           <div class="actions"><button class="btn primary" id="adm-sync-on" type="button" hidden>Turn on hourly sync</button>
             <button class="btn danger" id="adm-sync-off" type="button" hidden>Turn off hourly sync</button></div>`, 'Loading…')}
-      ${sect('storage', 'Storage (Google Sheets cell limit)', `<div id="storage-box" class="loading">Checking…</div>`, 'Loading…')}
+      ${sect('storage', 'Storage capacity', `<div id="storage-box" class="loading">Checking…</div>`, 'Loading…')}
       ${sect('machines', 'Machines', `<p class="note">One per line: <code>Machine | Shifts | active</code> or <code>| decommissioned</code>. For example <code>Halcyon | I,II,III | active</code>.
           Decommissioned machines keep their history in reports but are hidden from new entries.</p>
           <textarea id="adm-machines" rows="8">Loading…</textarea>
@@ -727,7 +727,7 @@
     let sources = [];
     const srcRow = (s, i) => `<tr data-i="${i}">
       <td><input data-k="label" value="${esc(s.label)}"></td>
-      <td><input data-k="id" value="${esc(s.id)}" placeholder="Paste sheet URL or ID"></td>
+      <td><input data-k="id" value="${esc(s.id)}" placeholder="Paste the source link"></td>
       <td><input data-k="year" type="number" min="2000" max="2100" value="${s.year || ''}" placeholder="auto"></td>
       <td style="text-align:center"><input data-k="hourly" type="checkbox" ${s.hourly ? 'checked' : ''} style="width:auto;min-height:0"></td>
       <td style="text-align:center"><input data-k="active" type="checkbox" ${s.active !== false ? 'checked' : ''} style="width:auto;min-height:0"></td>
@@ -745,12 +745,12 @@
     };
     const setSources = (list) => {
       sources = list.map((s) => ({ ...s, saved: true })); drawSources();
-      $('#hint-sources').textContent = `${list.filter((x) => x.active).length} active sheet(s)`;
+      $('#hint-sources').textContent = `${list.filter((x) => x.active).length} active source(s)`;
     };
     const loadSources = async () => setSources(await guarded(() => API.call('sources')));
     const runImport = async (sourceId, btn) => {
       btn.disabled = true; const label = btn.textContent; btn.textContent = 'Importing…';
-      $('#src-out').textContent = 'Importing… this can take up to a minute per sheet.';
+      $('#src-out').textContent = 'Importing… this can take up to a minute per source.';
       try {
         const res = await guarded(() => API.call('importLegacy', sourceId ? { sourceId } : {}));
         $('#src-out').textContent = res.map((r) => r.error ? `${r.source}: ERROR ${r.error}` : `${r.source}: ${r.added} added, ${r.updated} updated, ${r.unchanged} unchanged (${r.legacyRows} rows read)`).join('\n');
@@ -787,7 +787,7 @@
     const drawStorage = (st) => {
       const pct = st.percentUsed;
       const color = pct >= 80 ? 'var(--red)' : pct >= 50 ? 'var(--warn)' : 'var(--cyan)';
-      const verdict = pct >= 80 ? 'Plan a new database sheet soon.' : pct >= 50 ? 'Fine for now; keep an eye on it.' : 'Plenty of space. No new sheet needed.';
+      const verdict = pct >= 80 ? 'Plan additional storage soon.' : pct >= 50 ? 'Sufficient for now; review periodically.' : 'Ample capacity. No action needed.';
       $('#storage-box').className = '';
       $('#hint-storage').textContent = `${st.percentFree}% free`;
       $('#storage-box').innerHTML = `
@@ -796,17 +796,17 @@
           <div class="hint">${fmt(st.cells)} of ${fmt(st.limit)} cells allocated (${pct}% used). ${verdict}</div></div>
         <div class="progress" title="${pct}% used"><div style="width:${Math.max(pct, 0.5)}%;background:${color}"></div></div>
         <p class="note">${fmt(st.entries)} entries over ${st.yearsOfData} year(s) ≈ ${fmt(st.cellsPerYear)} cells per year of data${st.yearsLeft != null ? `, so roughly <b>${fmt(st.yearsLeft)} more years</b> fit at this rate` : ''}.
-          Google counts every cell in each tab's grid, including empty ones, so <b>Optimise</b> trims unused empty rows and columns. No data is changed.</p>
-        <details><summary class="note" style="cursor:pointer">Per-tab breakdown</summary>
+          Capacity counts all space allocated to each table, including unused space; <b>Optimise</b> releases unused space. No data is changed.</p>
+        <details><summary class="note" style="cursor:pointer">Per-table breakdown</summary>
           <div class="table-wrap" style="margin-top:8px"><table>
-            <thead><tr><th>Tab</th><th class="num">Data rows</th><th class="num">Grid (rows × cols)</th><th class="num">Cells</th></tr></thead>
-            <tbody>${st.tabs.map((t) => `<tr><td class="tech">${esc(t.name)}</td><td class="num">${fmt(t.dataRows)}</td><td class="num">${fmt(t.rows)} × ${t.cols}</td><td class="num">${fmt(t.cells)}</td></tr>`).join('')}</tbody>
+            <thead><tr><th>Table</th><th class="num">Records</th><th class="num">Allocated (rows × columns)</th><th class="num">Cells</th></tr></thead>
+            <tbody>${st.tabs.filter((t) => t.name !== 'Sheet1').map((t) => `<tr><td class="tech">${esc(t.name)}</td><td class="num">${fmt(t.dataRows)}</td><td class="num">${fmt(t.rows)} × ${t.cols}</td><td class="num">${fmt(t.cells)}</td></tr>`).join('')}</tbody>
           </table></div></details>
-        <div class="actions"><button class="btn" id="st-refresh" type="button">Refresh</button><button class="btn" id="st-opt" type="button">Optimise (free empty cells)</button></div>
+        <div class="actions"><button class="btn" id="st-refresh" type="button">Refresh</button><button class="btn" id="st-opt" type="button">Optimise (release unused space)</button></div>
         <p class="note">Checked ${esc(fmtDateTime(st.checkedAt))}${st.freedCells != null ? ` · freed ${fmt(st.freedCells)} cells` : ''}</p>`;
       $('#st-refresh').onclick = loadStorage;
       $('#st-opt').onclick = async (e) => {
-        if (!(await confirmBox('Optimise storage', 'Remove empty rows and columns beyond the data in every tab of the UNITY sheet? Your data is not changed.', 'Optimise'))) return;
+        if (!(await confirmBox('Optimise storage', 'Release unused space in every table of the UNITY database? Your data is not changed.', 'Optimise'))) return;
         e.currentTarget.disabled = true;
         try { drawStorage(await guarded(() => API.call('optimiseStorage'))); toast('Storage optimised.'); } catch (_) { /* toast shown */ }
       };

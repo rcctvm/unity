@@ -56,8 +56,8 @@ window.UnityHelp = {
         <p>UNITY records the number of patients treated with each radiotherapy technique, the total sittings and machine down time
           for every machine and shift, month by month. It produces the monthly and annual RT treatment reports for the
           <b>Division of Radiation Physics, Regional Cancer Centre, Thiruvananthapuram</b>.</p>
-        <p>It replaces the “Monthly RT Tx Report” Google Sheets used since 2022. All their data, from 2022 onwards, has been brought into UNITY,
-          and the reports produce the same totals.</p>
+        <p>It replaces the “Monthly RT Tx Report” system used since 2022. All data from 2022 onwards has been brought into UNITY,
+          and its reports reproduce the same totals.</p>
         <table class="info" style="width:auto"><tbody>
           <tr><td class="tech">Version</td><td id="about-version">—</td></tr>
           <tr><td class="tech">Released</td><td id="about-date">—</td></tr>
@@ -109,7 +109,7 @@ window.UnityHelp = {
 
         <h3 id="reports">Reports and printing</h3>
         <ul>
-          <li><b>Monthly report</b>: patients by technique for every machine and shift (I, II, III), with totals, sittings, workload per day, down time and shift in charge, the same layout as the old monthly sheet. A yellow note warns if some shifts have not submitted yet.</li>
+          <li><b>Monthly report</b>: patients by technique for every machine and shift (I, II, III), with totals, sittings, workload per day, down time and shift in charge, the same layout as the legacy monthly report. A yellow note warns if some shifts have not submitted yet.</li>
           <li><b>Annual report</b>: choose <b>Calendar year</b> (January–December) or <b>Financial year</b> (April–March). It shows technique × month, patients and sittings by machine × month, and the technique × machine/shift summary.</li>
           <li>Click <b>Print / PDF</b>. In the print window choose your printer, or <b>Save as PDF</b>. Reports print on A4 landscape in black on white, and each table is kept whole on one page.</li>
           <li>A machine appears in reports only for the periods when it was in use. For example, Halcyon appears from April 2023, and the decommissioned Clinac 600 C appears only in 2022.</li>
@@ -131,24 +131,24 @@ window.UnityHelp = {
         <p>Choose <b>Default</b> or <b>Courier New</b>. The choice is saved on this device and browser only, so each person can pick their own. It also applies to this help page.</p>
 
         <h3 id="sources">Data sources and import</h3>
-        <p>These are the old Google Sheets UNITY copies data from: the yearly sheets 2022–2025 and the live <b>Monthly RT Tx Report</b> sheet that the Google Form still writes to.</p>
+        <p>These are the legacy reports that UNITY imports data from: the yearly reports for 2022–2025 and the current <b>Monthly RT Tx Report</b>, which still receives the Google Form submissions.</p>
         <ul>
-          <li>UNITY <b>only reads</b> these sheets and never changes them.</li>
-          <li><b>Year</b>: for a yearly sheet, its year. Leave it empty for the live sheet, and the year is taken from each submission’s date.</li>
-          <li><b>Import</b> (one sheet) or <b>Import all active sources</b>. The result shows how many entries were added, updated and unchanged. Importing again is always safe and never creates duplicates.</li>
-          <li>To add a sheet, click <b>+ Add source</b>, paste the sheet’s address (URL), enter its year, then click <b>Save sources</b> before importing.</li>
+          <li>UNITY <b>only reads</b> these sources and never changes them.</li>
+          <li><b>Year</b>: for a yearly report, its year. Leave it empty for the current report; the year is then taken from each submission’s date.</li>
+          <li><b>Import</b> (one source) or <b>Import all active sources</b>. The result shows how many entries were added, updated and unchanged. Importing again is always safe and never creates duplicates.</li>
+          <li>To add a source, click <b>+ Add source</b>, paste its link, enter its year, then click <b>Save sources</b> before importing.</li>
         </ul>
 
         <h3 id="sync">Hourly sync from the Google Form</h3>
-        <p>While staff still use the Google Form, turn <b>hourly sync</b> on. Every hour, UNITY re-reads the sources ticked <b>Hourly sync</b> (normally the live sheet). Turn it off when the Google Form is retired.</p>
+        <p>While staff still use the Google Form, turn <b>hourly sync</b> on. Every hour, UNITY re-reads the sources ticked <b>Hourly sync</b> (normally the current report). Turn it off when the Google Form is retired.</p>
 
-        <h3 id="storage">Storage (Google Sheets cell limit)</h3>
-        <p>A Google Sheet can hold at most <b>10,000,000 cells</b> across all its tabs, and empty cells in each tab’s grid count too.
-          The Storage panel shows the <b>% space available</b>, cells used, a per-tab breakdown and an estimate of how many more years of data fit.</p>
+        <h3 id="storage">Storage capacity</h3>
+        <p>The UNITY database has a capacity of <b>10,000,000 cells</b>, counting all space allocated to its tables, including unused space.
+          The Storage capacity panel shows the <b>% space available</b>, the space in use, a per-table breakdown and an estimate of how many more years of data fit.</p>
         <ul>
-          <li>Green/cyan bar: plenty of space. Amber at 50% used: keep an eye on it. Red at 80% used: plan a new database sheet.</li>
-          <li><b>Optimise</b> removes unused empty rows and columns at the end of each tab. Your data is not changed.</li>
-          <li>For scale: one year of UNITY data is about 180 rows (15 machine-shifts × 12 months), roughly 5,000 cells. The limit is far away.</li>
+          <li>Green/cyan bar: plenty of space. Amber at 50% used: keep an eye on it. Red at 80% used: plan additional storage.</li>
+          <li><b>Optimise</b> releases unused space from each table. Your data is not changed.</li>
+          <li>For scale: one year of UNITY data is about 180 records (15 machine-shifts × 12 months), roughly 5,000 cells, so the capacity is far from being reached.</li>
         </ul>
 
         <h3 id="master">Machines, staff and workload</h3>
@@ -167,7 +167,7 @@ window.UnityHelp = {
           <li>Changing a password, renaming or disabling a user signs that user out on every device.</li>
           <li>There must always be at least one active admin; UNITY will not let you delete, disable or demote the last one.</li>
           <li>After 5 wrong passwords a user name is locked for 15 minutes.</li>
-          <li><b>All admins locked out?</b> In <b>script.google.com → UNITY → Project Settings → Script Properties</b>, add
+          <li><b>All admins locked out?</b> In the UNITY server console (<b>script.google.com → UNITY → Project Settings → Script Properties</b>), add
             <code>UNITY_RESET_ADMIN_PASSWORD</code> with a new password and save. On the next visit, user <code>admin</code> gets that password
             (and admin rights) and the property is removed automatically.</li>
         </ul>
@@ -178,10 +178,10 @@ window.UnityHelp = {
         <ul>
           <li><b>One entry per machine × shift × month.</b></li>
           <li><b>Total patients</b> = the sum of the technique counts. <b>Total sittings</b> and <b>down time</b> are entered separately.</li>
-          <li><b>Imported data</b>: when the old Google Form was submitted more than once for the same slot, the <b>first</b> submission is used, the same as the old sheets’ reports. Later re-submissions are ignored.</li>
+          <li><b>Imported data</b>: when the old Google Form was submitted more than once for the same slot, the <b>first</b> submission is used, as in the legacy reports. Later re-submissions are ignored.</li>
           <li><b>Corrections made in UNITY win.</b> An entry created or edited in UNITY is never overwritten by an import or the hourly sync.</li>
-          <li>In the 2024 sheet, TBI and TSET shared one column (“TBI/TSET”); those numbers are counted under <b>TSET</b>.</li>
-          <li>Every create, update, delete, import and settings change is recorded in the <b>AuditLog</b> tab of the UNITY sheet.</li>
+          <li>In the 2024 report, TBI and TSET shared one column (“TBI/TSET”); those numbers are counted under <b>TSET</b>.</li>
+          <li>Every create, update, delete, import and settings change is recorded in the UNITY <b>audit log</b>.</li>
         </ul>
       </section>
 
@@ -211,10 +211,10 @@ window.UnityHelp = {
         <h3>“Please sign in again”</h3>
         <p>Your session ended: it expired, or your password or user name was changed. Sign in again.</p>
         <h3>“Cannot reach the UNITY server”</h3>
-        <p>Check your internet connection and try again. On hospital networks that block Google services, ask IT to allow <code>script.google.com</code> and <code>script.googleusercontent.com</code>.</p>
+        <p>Check your internet connection and try again. If the hospital network restricts external services, ask IT to allow the UNITY server addresses <code>script.google.com</code> and <code>script.googleusercontent.com</code>.</p>
         <h3>I submitted the wrong numbers</h3>
         <p>Open <b>Entries</b>, click the row, correct it and click <b>Save changes</b>. Submitting the Google Form again does <b>not</b> change UNITY, because the first form submission is used.</p>
-        <h3>A report total differs from the old sheet</h3>
+        <h3>A report total differs from the legacy report</h3>
         <p>Check whether someone corrected that entry in UNITY: the <b>Source</b> column in Entries shows <code>unity</code> for entries made or edited in UNITY and <code>legacy</code> for imported ones.</p>
         <h3>The page looks out of date after an update</h3>
         <p>Press <kbd>Ctrl</kbd>+<kbd>F5</kbd> (Mac: <kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>) to reload.</p>
@@ -224,9 +224,9 @@ window.UnityHelp = {
         <h2>Technical notes (for administrators)</h2>
         <ul>
           <li><b>Website</b>: GitHub repository <code>rcctvm/unity</code> (public), published with GitHub Pages. It holds no data and no keys.</li>
-          <li><b>Server</b>: Google Apps Script project <b>UNITY</b>, with its code in the private repository <code>rcctvm/unity-code</code>.</li>
-          <li><b>Database</b>: Google Sheet <b>Drive › UNITY › UNITY</b> (tabs Entries, Machines, Staff, Workload, Techniques, Sources, Settings, Tariffs, AuditLog).</li>
-          <li><b>Automatic sync</b>: every code change pushed to GitHub is deployed to Apps Script automatically, and a health check runs afterwards. Edits made directly in the Apps Script editor are copied back to GitHub every 10 minutes, so the two always match.</li>
+          <li><b>Server</b>: the UNITY server, with its code in the private repository <code>rcctvm/unity-code</code>.</li>
+          <li><b>Database</b>: the UNITY database (tables: Entries, Machines, Staff, Workload, Techniques, Sources, Settings, Tariffs, Audit log).</li>
+          <li><b>Automatic sync</b>: every code change pushed to GitHub is deployed to the UNITY server automatically, and a health check runs afterwards. Changes made directly on the server are copied back to GitHub every 10 minutes, so the two always match.</li>
         </ul>
       </section>
       `,
