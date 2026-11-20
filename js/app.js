@@ -10,7 +10,43 @@
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const MACHINE_COLORS = ['#00ffff', '#ffff00', '#e5173f', '#3ddc84', '#ff9f40', '#b48cff', '#ff6fd8'];
 
-  const state = { role: null, cfg: null, charts: [], editing: null };
+  const state = { role: null, cfg: null, charts: [], editing: null, seq: 0 };
+
+  // ---------- page cache (stale-while-revalidate) ----------
+  // Pages you have seen open instantly from memory; a background request refreshes them and
+  // the page redraws only if the data changed. Any write on the server changes the data
+  // version, which clears this cache.
+  const cache = new Map();
+  const FRESH_MS = 30000;
+  const strip = (k, v) => (k === 'generatedAt' || k === 'checkedAt' ? undefined : v);
+  API.onVersionChange(() => cache.clear());
+  async function cachedLoad(action, params, rerender) {
+    const key = action + JSON.stringify(params);
+    const hit = cache.get(key);
+    const seq = state.seq;
+    if (hit) {
+      if (Date.now() - hit.at > FRESH_MS) {
+        API.call(action, params).then((data) => {
+          const changed = JSON.stringify(data, strip) !== JSON.stringify(hit.data, strip);
+          cache.set(key, { data, at: Date.now() });
+          if (changed && seq === state.seq) rerender();
+        }).catch(() => { /* keep showing cached data */ });
+      }
+      return hit.data;
+    }
+    loading();
+    const data = await guarded(() => API.call(action, params));
+    if (data !== undefined) cache.set(key, { data, at: Date.now() });
+    return seq === state.seq ? data : undefined;   // user moved on: don't draw
+  }
+  function prefetch(action, params) {
+    const key = action + JSON.stringify(params);
+    if (cache.has(key)) return Promise.resolve();
+    return API.call(action, params).then((data) => cache.set(key, { data, at: Date.now() })).catch(() => {});
+  }
+  function saveCfg() {
+    try { localStorage.setItem('unity.cfg', JSON.stringify({ role: state.role, cfg: state.cfg })); } catch (e) {}
+  }
 
   // ---------- helpers ----------
   function toast(msg, isError) {
@@ -75,14 +111,17 @@
     API.setKey(key, remember);
     state.role = data.role;
     state.cfg = data.config;
+    saveCfg();
     startApp();
+    warmUp();
   }
   function logout() {
     API.setKey('', false);
+    cache.clear();
+    try { localStorage.removeItem('unity.cfg'); } catch (e) {}
     state.role = null;
-    $('#app-view').hidden = true;
-    $('#login-view').hidden = false;
     $('#login-key').value = '';
+    showLogin();
   }
   $('#login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -105,11 +144,12 @@
   }
 
   // ---------- router ----------
-  const VIEWS = { dashboard: viewDashboard, entry: viewEntry, status: viewStatus, entries: viewEntries, monthly: viewMonthly, annual: viewAnnual, settings: viewSettings, admin: viewSettings };
+  const VIEWS = { dashboard: viewDashboard, entry: viewEntry, status: viewStatus, entries: viewEntries, monthly: viewMonthly, annual: viewAnnual, settings: viewSettings, admin: viewSettings, help: viewHelp };
   function route() {
     if (!state.role) return;
     const [, name = 'dashboard', ...args] = (location.hash || '#/dashboard').split('/');
     const view = VIEWS[name] || viewDashboard;
+    state.seq++;
     $$('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.view === name));
     view(...args);
   }
@@ -118,8 +158,7 @@
   // ---------- Dashboard ----------
   async function viewDashboard(year) {
     year = Number(year) || thisYear;
-    loading();
-    const d = await guarded(() => API.call('dashboard', { year }));
+    const d = await cachedLoad('dashboard', { year }, () => viewDashboard(year));
     if (!d) return;
     const s = state.cfg.settings;
     const busiest = d.months.reduce((b, m, i) => (m.patients > (b.v || 0) ? { v: m.patients, i } : b), {});
@@ -277,8 +316,7 @@
   async function viewStatus(year, month) {
     const p = defaultPeriod();
     year = Number(year) || p.year; month = month ? decodeURIComponent(month) : p.month;
-    loading();
-    const d = await guarded(() => API.call('status', { year, month }));
+    const d = await cachedLoad('status', { year, month }, () => viewStatus(year, month));
     if (!d) return;
     const done = d.slots.filter((s) => s.submitted).length;
     const byMachine = {};
@@ -308,8 +346,7 @@
   // ---------- Entries list ----------
   async function viewEntries(year, month, machine) {
     year = Number(year) || thisYear; month = month ? decodeURIComponent(month) : ''; machine = machine ? decodeURIComponent(machine) : '';
-    loading();
-    const rows = await guarded(() => API.call('listEntries', { year, month, machine }));
+    const rows = await cachedLoad('listEntries', { year, month, machine }, () => viewEntries(year, month, machine));
     if (!rows) return;
     const techs = state.cfg.techniques;
     setMain(`
@@ -322,15 +359,15 @@
         <button class="btn" id="csv-btn" type="button">Export CSV</button>
       </div>
       ${rows.length ? `<div class="table-wrap"><table>
-        <thead><tr><th>Month</th><th>Machine</th><th>Shift</th><th>Shift in charge</th>
+        <thead><tr><th>Month</th><th>Machine</th><th>Shift</th><th>In charge</th>
           ${techs.map((t) => `<th class="num" title="${esc(t.code)}">${esc(t.label)}</th>`).join('')}
           <th class="num">Patients</th><th class="num">Sittings</th><th class="num">Down time</th><th>Source</th>${state.role === 'admin' ? '<th></th>' : ''}</tr></thead>
         <tbody>${rows.map((r, i) => `<tr class="clickable" data-i="${i}">
-          <td>${esc(r.month.slice(0, 3))} ${r.year}</td><td class="tech">${esc(r.machine)}</td><td>${esc(r.shift)}</td><td>${esc(r.shiftInCharge)}</td>
+          <td>${esc(r.month.slice(0, 3))} ${r.year}</td><td class="tech">${esc(r.machine)}</td><td>${esc(r.shift)}</td><td title="${esc(r.shiftInCharge)}">${esc((r.shiftInCharge.match(/^\(\w+\)/) || [r.shiftInCharge])[0])}</td>
           ${techs.map((t) => `<td class="num ${r.counts[t.key] ? '' : 'zero'}">${r.counts[t.key] || 0}</td>`).join('')}
           <td class="num grand">${fmt(r.totalPatients)}</td><td class="num">${fmt(r.totalSittings)}</td><td class="num">${minToHM(r.downTimeMin)}</td>
           <td class="note">${esc(r.source)}</td>
-          ${state.role === 'admin' ? `<td><button class="btn danger small" data-del="${i}" type="button">Delete</button></td>` : ''}</tr>`).join('')}
+          ${state.role === 'admin' ? `<td><button class="btn danger small" data-del="${i}" type="button" title="Delete entry" aria-label="Delete entry">✕</button></td>` : ''}</tr>`).join('')}
         <tr class="total"><td colspan="4">Total</td>${techs.map((t) => `<td class="num">${fmt(rows.reduce((a, r) => a + (r.counts[t.key] || 0), 0))}</td>`).join('')}
           <td class="num">${fmt(rows.reduce((a, r) => a + r.totalPatients, 0))}</td><td class="num">${fmt(rows.reduce((a, r) => a + r.totalSittings, 0))}</td>
           <td class="num">${minToHM(rows.reduce((a, r) => a + r.downTimeMin, 0))}</td><td></td>${state.role === 'admin' ? '<td></td>' : ''}</tr>
@@ -403,8 +440,7 @@
   async function viewMonthly(year, month) {
     const p = defaultPeriod();
     year = Number(year) || p.year; month = month ? decodeURIComponent(month) : p.month;
-    loading();
-    const r = await guarded(() => API.call('monthlyReport', { year, month }));
+    const r = await cachedLoad('monthlyReport', { year, month }, () => viewMonthly(year, month));
     if (!r) return;
     const pending = r.totals.submitted.filter((s) => !s).length;
     setMain(`
@@ -417,9 +453,9 @@
       <div class="panel">
         ${reportHead(r)}
         ${pending ? `<div class="warn-box no-print">${pending} of ${r.columns.length} shift reports are still pending for this month. <a href="#/status/${year}/${month}">See status</a></div>` : ''}
-        ${reportGrid(r)}
-        <h3 style="margin-top:18px">Summary by machine</h3>
-        <div style="max-width:520px">${machineSummary(r)}</div>
+        <div class="print-block">${reportGrid(r)}</div>
+        <div class="print-block"><h3 style="margin-top:18px">Summary by machine</h3>
+        <div style="max-width:520px">${machineSummary(r)}</div></div>
       </div>`);
     const go = () => { location.hash = `#/monthly/${$('#m-year').value}/${$('#m-month').value}`; };
     $('#m-year').onchange = go; $('#m-month').onchange = go;
@@ -429,17 +465,16 @@
   async function viewAnnual(mode, year) {
     mode = mode === 'financial' ? 'financial' : 'calendar';
     year = Number(year) || (mode === 'financial' ? (now.getMonth() >= 3 ? thisYear : thisYear - 1) : thisYear);
-    loading();
-    const r = await guarded(() => API.call('annualReport', { mode, year }));
+    const r = await cachedLoad('annualReport', { mode, year }, () => viewAnnual(mode, year));
     if (!r) return;
     const labels = r.periods.map((p) => p.label);
-    const monthTable = (title, rows, totalRow) => `
+    const monthTable = (title, rows, totalRow) => `<div class="print-block">
       <h3 style="margin-top:18px">${title}</h3>
-      <div class="table-wrap"><table>
+      <div class="table-wrap"><table class="fit">
         <thead><tr><th></th>${labels.map((l) => `<th class="num">${esc(l)}</th>`).join('')}<th class="num">Total</th></tr></thead>
         <tbody>${rows.map((row) => `<tr><td class="tech">${esc(row.label)}${row.code ? ` <span class="note">${esc(row.code)}</span>` : ''}</td>${row.cells.map((v) => `<td class="num ${v ? '' : 'zero'}">${fmt(v)}</td>`).join('')}<td class="num grand">${fmt(row.total)}</td></tr>`).join('')}
         ${totalRow ? `<tr class="total"><td>Total</td>${totalRow.map((v) => `<td class="num">${fmt(v)}</td>`).join('')}<td class="num">${fmt(totalRow.reduce((a, b) => a + b, 0))}</td></tr>` : ''}</tbody>
-      </table></div>`;
+      </table></div></div>`;
     setMain(`
       <div class="toolbar">
         <h1 style="margin-right:auto">Annual report</h1>
@@ -459,11 +494,22 @@
         ${monthTable('Patients by technique and month', r.byMonth.techniques, r.byMonth.patients)}
         ${monthTable('Patients by machine and month', r.byMonth.machinePatients, r.byMonth.patients)}
         ${monthTable('Sittings by machine and month', r.byMonth.machineSittings, r.byMonth.sittings)}
-        <h3 style="margin-top:18px">Technique × machine &amp; shift</h3>
-        ${reportGrid(r)}
+        <div class="print-block"><h3 style="margin-top:18px">Technique × machine &amp; shift</h3>
+        ${reportGrid(r)}</div>
       </div>`);
     const go = () => { location.hash = `#/annual/${$('#a-mode').value}/${$('#a-year').value}`; };
     $('#a-mode').onchange = go; $('#a-year').onchange = go;
+  }
+
+  // ---------- Help (inside the app) ----------
+  function viewHelp(section) {
+    setMain('<div id="help-in"></div>');
+    window.UnityHelp.render($('#help-in'));
+    const rel = state.cfg.release || {};
+    if ($('#about-version')) $('#about-version').textContent = 'v' + (rel.version || '?');
+    if ($('#about-date')) $('#about-date').textContent = fmtDate(rel.date);
+    if (section && $('#' + section)) $('#' + section).scrollIntoView();
+    else window.scrollTo(0, 0);
   }
 
   // ---------- Settings ----------
@@ -471,81 +517,88 @@
     const isAdmin = state.role === 'admin';
     const font = window.UnityPrefs.getFont();
     const rel = state.cfg.release || {};
+    // Collapsible sections; each remembers whether it is open (Display opens by default).
+    const sect = (id, title, body, hint = '') => {
+      let open = id === 'display';
+      try { const v = localStorage.getItem('unity.sect.' + id); if (v !== null) open = v === '1'; } catch (e) {}
+      return `<details class="sect" data-sect="${id}" ${open ? 'open' : ''}>
+        <summary><span class="sect-title">${title}</span><span class="sect-hint" id="hint-${id}">${hint}</span></summary>
+        <div class="sect-body">${body}</div></details>`;
+    };
     setMain(`
-      <h1>Settings</h1>
-      <div class="sub">${isAdmin ? 'Display preferences, data sources, storage and master data.' : 'Display preferences for this device.'}</div>
-      <div class="grid two">
-        <div class="panel"><h2>Display</h2>
-          <div class="field"><label for="set-font">Font</label>
+      <div class="toolbar"><div><h1>Settings</h1>
+        <div class="sub">${isAdmin ? 'Click a section to expand or collapse it.' : 'Display preferences for this device.'}</div></div>
+        <div style="flex:1"></div>
+        <button class="btn small" id="sect-all" type="button">Expand all</button></div>
+      ${sect('display', 'Display', `
+          <div class="field" style="max-width:360px"><label for="set-font">Font</label>
             <select id="set-font">
               <option value="default" ${font === 'default' ? 'selected' : ''}>Default (system sans-serif)</option>
               <option value="courier" ${font === 'courier' ? 'selected' : ''}>Courier New</option>
             </select></div>
-          <p class="note" style="margin-top:8px">Saved on this device and browser only, so each person can choose their own.</p>
-        </div>
-        <div class="panel"><h2>About this app</h2>
-          <table class="info"><tbody>
+          <p class="note" style="margin-top:8px">Saved on this device and browser only, so each person can choose their own.</p>`,
+        font === 'courier' ? 'Courier New' : 'Default font')}
+      ${sect('about', 'About this app', `
+          <table class="info" style="max-width:640px"><tbody>
             <tr><td class="tech">Application</td><td>UNITY: Monthly RT Treatment Tracker</td></tr>
             <tr><td class="tech">Version</td><td>v${esc(rel.version || '?')}</td></tr>
             <tr><td class="tech">Released</td><td>${esc(fmtDate(rel.date))}</td></tr>
             <tr><td class="tech">Department</td><td>${esc(state.cfg.settings.department || '')}</td></tr>
             <tr><td class="tech">Signed in as</td><td>${isAdmin ? 'Admin' : 'Staff'}</td></tr>
           </tbody></table>
-          <div class="actions"><a class="btn" href="help.html" target="_blank" rel="noopener">Help, about &amp; user manual</a></div>
-        </div>
-      </div>
+          <div class="actions"><a class="btn" href="#/help">Help, about &amp; user manual</a></div>`,
+        `v${esc(rel.version || '?')} · ${esc(fmtDate(rel.date))}`)}
       ${isAdmin ? `
-      <h2 style="margin-top:8px">Data sources &amp; import</h2>
-      <div class="panel">
+      ${sect('sources', 'Data sources &amp; import', `
         <p class="note">The old “Monthly RT Tx Report” Google Sheets that UNITY copies data from. UNITY <b>only reads</b> them.
           For a yearly sheet enter its <b>Year</b>; leave Year empty for the live sheet (the year is then taken from each submission’s date).
           The first submission per machine/shift/month is used (same as the old sheets). Entries created or edited in UNITY are never overwritten. Importing again never creates duplicates.</p>
-        <div class="table-wrap"><table id="src-table">
-          <thead><tr><th>Label</th><th>Spreadsheet ID or URL</th><th>Year</th><th>Hourly sync</th><th>Active</th><th>Last import</th><th></th><th></th></tr></thead>
+        <div class="table-wrap"><table id="src-table" class="fit">
+          <thead><tr><th style="width:20%">Label</th><th style="width:26%">Spreadsheet ID or URL</th><th style="width:8%">Year</th><th style="width:7%">Hourly sync</th><th style="width:6%">Active</th><th>Last import</th><th style="width:72px"></th><th style="width:44px"></th></tr></thead>
           <tbody><tr><td colspan="8" class="loading">Loading…</td></tr></tbody></table></div>
         <div class="actions">
           <button class="btn" id="src-add" type="button">+ Add source</button>
           <button class="btn" id="src-save" type="button">Save sources</button>
           <button class="btn primary" id="src-import-all" type="button">Import all active sources</button>
         </div>
-        <pre id="src-out" class="note" style="white-space:pre-wrap;margin:10px 0 0"></pre>
-      </div>
-      <div class="grid two">
-        <div class="panel"><h2>Hourly sync from Google Form</h2>
+        <pre id="src-out" class="note" style="white-space:pre-wrap;margin:10px 0 0"></pre>`, 'Loading…')}
+      ${sect('sync', 'Hourly sync from Google Form', `
           <p class="note">Every hour, re-reads the sources marked <b>Hourly sync</b> (normally the live sheet) so Google Form submissions appear in UNITY.</p>
           <p>Status: <b id="adm-sync-status">checking…</b></p>
           <div class="actions"><button class="btn primary" id="adm-sync-on" type="button" hidden>Turn on hourly sync</button>
-            <button class="btn danger" id="adm-sync-off" type="button" hidden>Turn off hourly sync</button></div></div>
-        <div class="panel"><h2>Storage (Google Sheets cell limit)</h2>
-          <div id="storage-box" class="loading">Checking…</div></div>
-      </div>
-      <h2 style="margin-top:8px">Master data</h2>
-      <div class="grid two">
-        <div class="panel"><h2>Machines</h2><p class="note">One per line: <code>Machine | Shifts | active</code> or <code>| decommissioned</code>. For example <code>Halcyon | I,II,III | active</code>.
+            <button class="btn danger" id="adm-sync-off" type="button" hidden>Turn off hourly sync</button></div>`, 'Loading…')}
+      ${sect('storage', 'Storage (Google Sheets cell limit)', `<div id="storage-box" class="loading">Checking…</div>`, 'Loading…')}
+      ${sect('machines', 'Machines', `<p class="note">One per line: <code>Machine | Shifts | active</code> or <code>| decommissioned</code>. For example <code>Halcyon | I,II,III | active</code>.
           Decommissioned machines keep their history in reports but are hidden from new entries.</p>
           <textarea id="adm-machines" rows="8">Loading…</textarea>
-          <div class="actions"><button class="btn primary" data-save="Machines" type="button">Save machines</button></div></div>
-        <div class="panel"><h2>Shift in charge list</h2><p class="note">One name per line, e.g. <code>(SGS) Salini G.S.</code></p>
-          <textarea id="adm-staff" rows="8">${esc(state.cfg.staff.join('\n'))}</textarea>
-          <div class="actions"><button class="btn primary" data-save="Staff" type="button">Save staff</button></div></div>
-        <div class="panel"><h2>Workload per day</h2><p class="note"><code>Machine | Shift | Patients per day</code></p>
-          <textarea id="adm-workload" rows="8">${esc(state.cfg.machines.flatMap((m) => m.shifts.map((s) => `${m.name} | ${s} | ${state.cfg.workload[m.name + '|' + s] || 0}`)).join('\n'))}</textarea>
-          <div class="actions"><button class="btn primary" data-save="Workload" type="button">Save workload</button></div></div>
-      </div>` : ''}
+          <div class="actions"><button class="btn primary" data-save="Machines" type="button">Save machines</button></div>`, `${state.cfg.machines.length} in use`)}
+      ${sect('staff', 'Shift in charge list', `<p class="note">One name per line, e.g. <code>(SGS) Salini G.S.</code></p>
+          <textarea id="adm-staff" rows="10">${esc(state.cfg.staff.join('\n'))}</textarea>
+          <div class="actions"><button class="btn primary" data-save="Staff" type="button">Save staff</button></div>`, `${state.cfg.staff.length} names`)}
+      ${sect('workload', 'Workload per day', `<p class="note"><code>Machine | Shift | Patients per day</code></p>
+          <textarea id="adm-workload" rows="10">${esc(state.cfg.machines.flatMap((m) => m.shifts.map((s) => `${m.name} | ${s} | ${state.cfg.workload[m.name + '|' + s] || 0}`)).join('\n'))}</textarea>
+          <div class="actions"><button class="btn primary" data-save="Workload" type="button">Save workload</button></div>`, 'Reference figures')}
+      ` : ''}
     `);
-
+    const syncAllBtn = () => { $('#sect-all').textContent = $$('details.sect').every((d) => d.open) ? 'Collapse all' : 'Expand all'; };
+    $$('details.sect').forEach((d) => d.addEventListener('toggle', () => {
+      try { localStorage.setItem('unity.sect.' + d.dataset.sect, d.open ? '1' : '0'); } catch (e) {}
+      syncAllBtn();
+    }));
+    $('#sect-all').onclick = () => { const open = !$$('details.sect').every((d) => d.open); $$('details.sect').forEach((d) => { d.open = open; }); };
+    syncAllBtn();
     $('#set-font').onchange = (e) => { window.UnityPrefs.setFont(e.target.value); toast('Font updated.'); };
     if (!isAdmin) return;
 
     // --- data sources ---
     let sources = [];
     const srcRow = (s, i) => `<tr data-i="${i}">
-      <td><input data-k="label" value="${esc(s.label)}" style="min-width:180px"></td>
-      <td><input data-k="id" value="${esc(s.id)}" style="min-width:220px" placeholder="Paste sheet URL or ID"></td>
-      <td><input data-k="year" type="number" min="2000" max="2100" value="${s.year || ''}" placeholder="auto" style="width:90px"></td>
+      <td><input data-k="label" value="${esc(s.label)}"></td>
+      <td><input data-k="id" value="${esc(s.id)}" placeholder="Paste sheet URL or ID"></td>
+      <td><input data-k="year" type="number" min="2000" max="2100" value="${s.year || ''}" placeholder="auto"></td>
       <td style="text-align:center"><input data-k="hourly" type="checkbox" ${s.hourly ? 'checked' : ''} style="width:auto;min-height:0"></td>
       <td style="text-align:center"><input data-k="active" type="checkbox" ${s.active !== false ? 'checked' : ''} style="width:auto;min-height:0"></td>
-      <td class="note" style="white-space:normal;min-width:200px">${s.lastImport ? esc(fmtDateTime(s.lastImport)) + '<br>' + esc(s.lastResult) : 'never'}</td>
+      <td class="note wrap">${s.lastImport ? esc(fmtDateTime(s.lastImport)) + '<br>' + esc(s.lastResult) : 'never'}</td>
       <td>${s.id && s.saved ? `<button class="btn small" data-import="${i}" type="button">Import</button>` : ''}</td>
       <td><button class="btn danger small" data-remove="${i}" type="button" title="Remove">✕</button></td></tr>`;
     const readSources = () => $$('#src-table tbody tr[data-i]').map((tr) => {
@@ -557,14 +610,18 @@
       $$('[data-remove]').forEach((b) => b.onclick = () => { sources = readSources().map((s, i) => ({ ...sources[i], ...s })); sources.splice(Number(b.dataset.remove), 1); drawSources(); });
       $$('[data-import]').forEach((b) => b.onclick = () => runImport(sources[Number(b.dataset.import)].id, b));
     };
-    const loadSources = async () => { sources = (await guarded(() => API.call('sources'))).map((s) => ({ ...s, saved: true })); drawSources(); };
+    const setSources = (list) => {
+      sources = list.map((s) => ({ ...s, saved: true })); drawSources();
+      $('#hint-sources').textContent = `${list.filter((x) => x.active).length} active sheet(s)`;
+    };
+    const loadSources = async () => setSources(await guarded(() => API.call('sources')));
     const runImport = async (sourceId, btn) => {
       btn.disabled = true; const label = btn.textContent; btn.textContent = 'Importing…';
       $('#src-out').textContent = 'Importing… this can take up to a minute per sheet.';
       try {
         const res = await guarded(() => API.call('importLegacy', sourceId ? { sourceId } : {}));
         $('#src-out').textContent = res.map((r) => r.error ? `${r.source}: ERROR ${r.error}` : `${r.source}: ${r.added} added, ${r.updated} updated, ${r.unchanged} unchanged (${r.legacyRows} rows read)`).join('\n');
-        state.cfg = await API.call('bootstrap');
+        state.cfg = await API.call('bootstrap'); saveCfg();
         await loadSources(); loadStorage(); loadMachines();
         toast('Import finished.');
       } catch (e) { $('#src-out').textContent = 'Import failed: ' + e.message; }
@@ -577,13 +634,13 @@
       finally { e.currentTarget.disabled = false; }
     };
     $('#src-import-all').onclick = (e) => runImport(null, e.currentTarget);
-    loadSources();
 
     // --- hourly sync ---
     const showSync = (on) => {
       $('#adm-sync-status').textContent = on ? 'ON: runs every hour' : 'OFF';
       $('#adm-sync-status').style.color = on ? 'var(--ok)' : '#ff8aa0';
       $('#adm-sync-on').hidden = on; $('#adm-sync-off').hidden = !on;
+      $('#hint-sync').textContent = on ? 'ON' : 'OFF';
     };
     const setSync = async (enabled, btn) => {
       btn.disabled = true;
@@ -592,7 +649,6 @@
     };
     $('#adm-sync-on').onclick = (e) => setSync(true, e.currentTarget);
     $('#adm-sync-off').onclick = (e) => setSync(false, e.currentTarget);
-    API.call('legacySync', {}).then((r) => showSync(r.enabled)).catch((e) => { $('#adm-sync-status').textContent = 'unknown (' + e.message + ')'; });
 
     // --- storage ---
     const drawStorage = (st) => {
@@ -600,6 +656,7 @@
       const color = pct >= 80 ? 'var(--red)' : pct >= 50 ? 'var(--warn)' : 'var(--cyan)';
       const verdict = pct >= 80 ? 'Plan a new database sheet soon.' : pct >= 50 ? 'Fine for now; keep an eye on it.' : 'Plenty of space. No new sheet needed.';
       $('#storage-box').className = '';
+      $('#hint-storage').textContent = `${st.percentFree}% free`;
       $('#storage-box').innerHTML = `
         <div class="kpi" style="margin-bottom:10px"><div class="label">Space available</div>
           <div class="value">${st.percentFree.toLocaleString('en-IN')}%</div>
@@ -624,16 +681,21 @@
     async function loadStorage() {
       try { drawStorage(await API.call('storage')); } catch (e) { $('#storage-box').textContent = 'Could not check storage: ' + e.message; }
     }
-    loadStorage();
 
     // --- master data ---
+    const setMachines = (all) => {
+      $('#adm-machines').value = all.map((m) => `${m.name} | ${m.shifts} | ${m.active ? 'active' : 'decommissioned'}`).join('\n');
+      const off = all.filter((m) => !m.active).length;
+      $('#hint-machines').textContent = `${all.length - off} in use${off ? `, ${off} decommissioned` : ''}`;
+    };
     async function loadMachines() {
-      try {
-        const all = await API.call('allMachines');
-        $('#adm-machines').value = all.map((m) => `${m.name} | ${m.shifts} | ${m.active ? 'active' : 'decommissioned'}`).join('\n');
-      } catch (e) { $('#adm-machines').value = ''; toast(e.message, true); }
+      try { setMachines(await API.call('allMachines')); } catch (e) { $('#adm-machines').value = ''; toast(e.message, true); }
     }
-    loadMachines();
+    // One request fills every admin section.
+    guarded(() => API.call('settingsData')).then((d) => {
+      if (!d || !$('#src-table')) return;
+      setSources(d.sources); showSync(d.syncOn); drawStorage(d.storage); setMachines(d.machines);
+    }).catch(() => {});
     const lines = (id) => $(id).value.split('\n').map((l) => l.trim()).filter(Boolean);
     const builders = {
       Machines: () => lines('#adm-machines').map((l, i) => { const [n, s, a] = l.split('|').map((x) => (x || '').trim()); return { Name: n, Shifts: s || 'I,II,III', Order: i + 1, Active: !/^(decommissioned|inactive|no|false)$/i.test(a || '') }; }),
@@ -644,7 +706,7 @@
       const table = b.dataset.save;
       b.disabled = true;
       try {
-        state.cfg = await guarded(() => API.call('saveConfig', { table, rows: builders[table]() }));
+        state.cfg = await guarded(() => API.call('saveConfig', { table, rows: builders[table]() })); saveCfg();
         toast(table + ' saved.');
       } finally { b.disabled = false; }
     }));
@@ -661,30 +723,55 @@
   }
   function renderFooter() {
     const rel = (state.cfg && state.cfg.release) || {};
-    $('#app-footer').innerHTML = `UNITY v${esc(rel.version || '')} · Released ${esc(fmtDate(rel.date))} · Division of Radiation Physics, RCC Thiruvananthapuram · <a href="help.html" target="_blank" rel="noopener">Help</a>`;
+    $('#app-footer').innerHTML = `UNITY v${esc(rel.version || '')} · Released ${esc(fmtDate(rel.date))} · Division of Radiation Physics, RCC Thiruvananthapuram · <a href="#/help">Help</a>`;
   }
 
   // ---------- boot ----------
-  // Version on the login screen (public ping, no key needed).
-  (async function loginVersion() {
+  // Version on the login screen (public ping, no key needed) — only when the login screen shows.
+  async function loginVersion() {
     try {
       const url = window.UNITY_CONFIG.API_URL;
       if (!url || url.includes('REPLACE_WITH')) return;
       const r = await (await fetch(url + (url.includes('?') ? '&' : '?') + 'action=ping')).json();
       if (r && r.version) $('#login-version').textContent = `UNITY v${r.version} · Released ${fmtDate(r.releaseDate)}`;
     } catch (e) { /* offline: keep plain label */ }
-  })();
+  }
+  function showLogin() {
+    $('#app-view').hidden = true;
+    $('#login-view').hidden = false;
+    loginVersion();
+  }
+  // Warm the cache for the pages people open most, one request at a time, when idle.
+  function warmUp() {
+    const p = defaultPeriod();
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1500));
+    idle(async () => {
+      await prefetch('dashboard', { year: thisYear });
+      await prefetch('status', { year: p.year, month: p.month });
+      await prefetch('monthlyReport', { year: p.year, month: p.month });
+    });
+  }
   (async function boot() {
     const key = API.getKey();
-    if (!key) { $('#login-view').hidden = false; return; }
+    if (!key) { showLogin(); return; }
+    // Instant start from the configuration saved at the last visit; verify in the background.
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem('unity.cfg') || 'null'); } catch (e) {}
+    if (saved && saved.cfg && saved.role) {
+      state.role = saved.role; state.cfg = saved.cfg;
+      startApp();
+    }
     try {
       const data = await API.call('login', {}, key);
+      const changed = !saved || saved.role !== data.role || JSON.stringify(saved.cfg) !== JSON.stringify(data.config);
       state.role = data.role; state.cfg = data.config;
-      startApp();
+      saveCfg();
+      if (!saved) startApp();
+      else if (changed) { document.body.classList.toggle('is-admin', state.role === 'admin'); renderFooter(); }
+      warmUp();
     } catch (e) {
-      $('#login-view').hidden = false;
-      if (!e.auth) { $('#login-error').textContent = e.message; $('#login-error').hidden = false; }
-      else API.setKey('', false);
+      if (e.auth) { logout(); showLogin(); $('#login-error').textContent = e.message; $('#login-error').hidden = false; return; }
+      if (!saved) { showLogin(); $('#login-error').textContent = e.message; $('#login-error').hidden = false; }
     }
   })();
 })();

@@ -14,6 +14,9 @@
     memKey = key;
   }
   let memKey = getKey();
+  // Server data version: every response carries it; when it changes, cached pages are stale.
+  let dataVersion = null;
+  const versionListeners = [];
 
   async function call(action, params = {}, keyOverride) {
     const url = window.UNITY_CONFIG.API_URL;
@@ -27,6 +30,10 @@
     }
     let json;
     try { json = await res.json(); } catch (e) { throw new Error('Unexpected server response.'); }
+    if (json.v && json.v !== dataVersion) {
+      const prev = dataVersion; dataVersion = json.v;
+      if (prev !== null) versionListeners.forEach((fn) => { try { fn(json.v); } catch (e) {} });
+    }
     if (!json.ok) {
       const err = new Error(String(json.error || 'Request failed').replace(/^AUTH:\s*/, ''));
       err.auth = /^AUTH:/.test(json.error || '');
@@ -35,5 +42,5 @@
     return json.data;
   }
 
-  window.UnityAPI = { call, getKey: () => memKey, setKey };
+  window.UnityAPI = { call, getKey: () => memKey, setKey, onVersionChange: (fn) => versionListeners.push(fn) };
 })();
