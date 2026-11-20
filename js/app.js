@@ -483,6 +483,11 @@
         <div class="panel"><h2>Workload per day</h2><p class="note"><code>Machine | Shift | Patients per day</code></p>
           <textarea id="adm-workload" rows="8">${esc(workloadTxt)}</textarea>
           <div class="actions"><button class="btn primary" data-save="Workload" type="button">Save workload</button></div></div>
+        <div class="panel"><h2>Hourly sync from Google Form</h2>
+          <p class="note">While staff still use the old Google Form, UNITY can copy new submissions from the live “Monthly RT Tx Report” sheet every hour. It <b>only reads</b> that sheet. Entries edited in UNITY are never overwritten.</p>
+          <p>Status: <b id="adm-sync-status">checking…</b></p>
+          <div class="actions"><button class="btn primary" id="adm-sync-on" type="button" hidden>Turn on hourly sync</button>
+            <button class="btn danger" id="adm-sync-off" type="button" hidden>Turn off hourly sync</button></div></div>
         <div class="panel"><h2>Import from legacy sheet</h2>
           <p class="note">Reads the <b>DATA</b> tab of “Monthly RT Tx Report” and “2025_Monthly RT Tx Report” <b>without changing them</b>.
           The latest submission per machine/shift/month is copied into UNITY. Entries created or edited in UNITY are never overwritten. Safe to run repeatedly.</p>
@@ -504,6 +509,19 @@
         toast(table + ' saved.');
       } finally { b.disabled = false; }
     }));
+    const showSync = (on) => {
+      $('#adm-sync-status').textContent = on ? 'ON — runs every hour' : 'OFF';
+      $('#adm-sync-status').style.color = on ? 'var(--ok)' : '#ff8aa0';
+      $('#adm-sync-on').hidden = on; $('#adm-sync-off').hidden = !on;
+    };
+    const setSync = async (enabled, btn) => {
+      btn.disabled = true;
+      try { const r = await guarded(() => API.call('legacySync', { enabled })); showSync(r.enabled); toast(r.enabled ? 'Hourly sync is on.' : 'Hourly sync is off.'); }
+      finally { btn.disabled = false; }
+    };
+    $('#adm-sync-on').onclick = (e) => setSync(true, e.currentTarget);
+    $('#adm-sync-off').onclick = (e) => setSync(false, e.currentTarget);
+    API.call('legacySync', {}).then((r) => showSync(r.enabled)).catch((e) => { $('#adm-sync-status').textContent = 'unknown (' + e.message + ')'; });
     $('#adm-import').onclick = async () => {
       const b = $('#adm-import'); b.disabled = true; b.textContent = 'Importing…';
       try {
