@@ -490,7 +490,7 @@
             <button class="btn danger" id="adm-sync-off" type="button" hidden>Turn off hourly sync</button></div></div>
         <div class="panel"><h2>Import from legacy sheet</h2>
           <p class="note">Reads the <b>DATA</b> tab of “Monthly RT Tx Report” and “2025_Monthly RT Tx Report” <b>without changing them</b>.
-          The latest submission per machine/shift/month is copied into UNITY. Entries created or edited in UNITY are never overwritten. Safe to run repeatedly.</p>
+          The first submission per machine/shift/month is copied into UNITY (same as the old sheet’s reports). Entries created or edited in UNITY are never overwritten. Safe to run repeatedly.</p>
           <div class="actions"><button class="btn primary" id="adm-import" type="button">Run import</button></div>
           <pre id="adm-import-out" class="note" style="white-space:pre-wrap"></pre></div>
       </div>`);
