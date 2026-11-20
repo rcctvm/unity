@@ -7,6 +7,7 @@
   <meta name="description" content="UNITY: Monthly radiotherapy treatment tracking, Division of Radiation Physics, Regional Cancer Centre, Thiruvananthapuram.">
   <meta name="theme-color" content="#0C343D">
   <link rel="icon" href="assets/logo.jpg">
+  <script src="js/prefs.js"></script>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -26,6 +27,7 @@
       </div>
       <button class="btn primary" type="submit" id="login-btn">Sign in</button>
       <p id="login-error" style="color:#ff8aa0;margin-top:12px" hidden></p>
+      <div class="login-foot"><span id="login-version">UNITY</span> · <a href="help.html" target="_blank" rel="noopener">Help &amp; user manual</a></div>
     </form>
   </div>
 
@@ -45,9 +47,11 @@
       <a href="#/entries" data-view="entries">Entries</a>
       <a href="#/monthly" data-view="monthly">Monthly report</a>
       <a href="#/annual" data-view="annual">Annual report</a>
-      <a href="#/admin" data-view="admin" class="admin-only">Admin</a>
+      <a href="#/settings" data-view="settings">Settings</a>
+      <a href="help.html" target="_blank" rel="noopener">Help</a>
     </nav>
     <main id="main"><div class="loading">Loading…</div></main>
+    <footer class="app-footer" id="app-footer"></footer>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

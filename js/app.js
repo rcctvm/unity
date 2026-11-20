@@ -100,17 +100,17 @@
     document.body.classList.toggle('is-admin', state.role === 'admin');
     $('#role-badge').textContent = state.role === 'admin' ? 'Admin' : 'Staff';
     if (state.cfg.settings.department) $('#dept-line').textContent = state.cfg.settings.department;
+    renderFooter();
     route();
   }
 
   // ---------- router ----------
-  const VIEWS = { dashboard: viewDashboard, entry: viewEntry, status: viewStatus, entries: viewEntries, monthly: viewMonthly, annual: viewAnnual, admin: viewAdmin };
+  const VIEWS = { dashboard: viewDashboard, entry: viewEntry, status: viewStatus, entries: viewEntries, monthly: viewMonthly, annual: viewAnnual, settings: viewSettings, admin: viewSettings };
   function route() {
     if (!state.role) return;
     const [, name = 'dashboard', ...args] = (location.hash || '#/dashboard').split('/');
     const view = VIEWS[name] || viewDashboard;
     $$('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.view === name));
-    if (name === 'admin' && state.role !== 'admin') { location.hash = '#/dashboard'; return; }
     view(...args);
   }
   window.addEventListener('hashchange', route);
@@ -149,7 +149,6 @@
           </table></div>
         </div>
       </div>
-      ${s.phone || s.email ? `<div class="foot">Contact: ${esc(s.phone)} ${s.email ? '· <a href="mailto:' + esc(s.email) + '">' + esc(s.email) + '</a>' : ''}</div>` : ''}
     `);
     $('#dash-year').onchange = (e) => { location.hash = '#/dashboard/' + e.target.value; };
     const labels = MONTHS.map((m) => m.slice(0, 3));
@@ -366,22 +365,25 @@
 
   // ---------- Report grid (monthly & annual share it) ----------
   function reportGrid(r, opts = {}) {
+    // Alternate machines get a different shade (black / dark teal, as in the old Google Sheet).
     const machines = [];
     r.columns.forEach((c) => { const last = machines[machines.length - 1]; if (last && last.name === c.machine) last.span++; else machines.push({ name: c.machine, span: 1 }); });
-    const cell = (v) => `<td class="num ${v ? '' : 'zero'}">${fmt(v)}</td>`;
+    const mIdx = r.columns.map((c) => machines.findIndex((m) => m.name === c.machine));
+    const cls = (i) => (mIdx[i] % 2 ? ' m-alt' : '') + (i === 0 || mIdx[i] !== mIdx[i - 1] ? ' m-start' : '');
+    const cell = (v, i) => `<td class="num${v ? '' : ' zero'}${cls(i)}">${fmt(v)}</td>`;
     const t = r.totals;
-    return `<div class="table-wrap"><table>
+    return `<div class="table-wrap"><table class="report-grid">
       <thead>
-        <tr><th rowspan="2">Technique</th><th rowspan="2">Code</th>${machines.map((m) => `<th class="machine" colspan="${m.span}">${esc(m.name)}</th>`).join('')}<th rowspan="2" class="num">Total</th></tr>
-        <tr>${r.columns.map((c) => `<th class="num">${esc(c.shift)}</th>`).join('')}</tr>
+        <tr><th rowspan="2">Technique</th><th rowspan="2">Code</th>${machines.map((m, j) => `<th class="machine m-start${j % 2 ? ' m-alt' : ''}" colspan="${m.span}">${esc(m.name)}</th>`).join('')}<th rowspan="2" class="num m-start">Total</th></tr>
+        <tr>${r.columns.map((c, i) => `<th class="num${cls(i)}">${esc(c.shift)}</th>`).join('')}</tr>
       </thead>
       <tbody>
-        ${r.rows.map((row) => `<tr><td class="tech">${esc(row.label)}</td><td class="code">${esc(row.code)}</td>${row.cells.map(cell).join('')}<td class="num grand">${fmt(row.total)}</td></tr>`).join('')}
-        <tr class="total"><td colspan="2">Total patients</td>${t.patients.map((v) => `<td class="num">${fmt(v)}</td>`).join('')}<td class="num">${fmt(t.grandPatients)}</td></tr>
-        <tr class="total"><td colspan="2">Total no. of sittings</td>${t.sittings.map((v) => `<td class="num">${fmt(v)}</td>`).join('')}<td class="num">${fmt(t.grandSittings)}</td></tr>
-        ${t.workload ? `<tr class="meta"><td colspan="2">Workload per day</td>${t.workload.map((v) => `<td class="num">${v || ''}</td>`).join('')}<td></td></tr>` : ''}
-        <tr class="meta"><td colspan="2">Total down time (h:mm)</td>${t.downTimeMin.map((v) => `<td class="num">${minToHM(v)}</td>`).join('')}<td class="num">${minToHM(t.grandDownTimeMin)}</td></tr>
-        ${t.shiftInCharge ? `<tr class="meta"><td colspan="2">Shift in charge</td>${t.shiftInCharge.map((v, i) => `<td title="${esc(v)}">${v ? esc((v.match(/^\(\w+\)/) || [v])[0]) : (t.submitted[i] ? '' : '<span style="color:#ff8aa0">pending</span>')}</td>`).join('')}<td></td></tr>` : ''}
+        ${r.rows.map((row) => `<tr><td class="tech">${esc(row.label)}</td><td class="code">${esc(row.code)}</td>${row.cells.map(cell).join('')}<td class="num grand m-start">${fmt(row.total)}</td></tr>`).join('')}
+        <tr class="total"><td colspan="2">Total patients</td>${t.patients.map((v, i) => `<td class="num${cls(i)}">${fmt(v)}</td>`).join('')}<td class="num m-start">${fmt(t.grandPatients)}</td></tr>
+        <tr class="total"><td colspan="2">Total no. of sittings</td>${t.sittings.map((v, i) => `<td class="num${cls(i)}">${fmt(v)}</td>`).join('')}<td class="num m-start">${fmt(t.grandSittings)}</td></tr>
+        ${t.workload ? `<tr class="meta"><td colspan="2">Workload per day</td>${t.workload.map((v, i) => `<td class="num${cls(i)}">${v || ''}</td>`).join('')}<td class="m-start"></td></tr>` : ''}
+        <tr class="meta"><td colspan="2">Total down time (h:mm)</td>${t.downTimeMin.map((v, i) => `<td class="num${cls(i)}">${minToHM(v)}</td>`).join('')}<td class="num m-start">${minToHM(t.grandDownTimeMin)}</td></tr>
+        ${t.shiftInCharge ? `<tr class="meta"><td colspan="2">Shift in charge</td>${t.shiftInCharge.map((v, i) => `<td class="${cls(i)}" title="${esc(v)}">${v ? esc((v.match(/^\(\w+\)/) || [v])[0]) : (t.submitted[i] ? '' : '<span style="color:#ff8aa0">pending</span>')}</td>`).join('')}<td class="m-start"></td></tr>` : ''}
       </tbody></table></div>`;
   }
 
@@ -464,53 +466,122 @@
     $('#a-mode').onchange = go; $('#a-year').onchange = go;
   }
 
-  // ---------- Admin ----------
-  function viewAdmin() {
-    const cfg = state.cfg;
-    const machinesTxt = cfg.machines.map((m) => `${m.name} | ${m.shifts.join(',')}`).join('\n');
-    const staffTxt = cfg.staff.join('\n');
-    const workloadTxt = cfg.machines.flatMap((m) => m.shifts.map((s) => `${m.name} | ${s} | ${cfg.workload[m.name + '|' + s] || 0}`)).join('\n');
+  // ---------- Settings ----------
+  async function viewSettings() {
+    const isAdmin = state.role === 'admin';
+    const font = window.UnityPrefs.getFont();
+    const rel = state.cfg.release || {};
     setMain(`
-      <h1>Admin</h1>
-      <div class="sub">Master data lives in the UNITY Google Sheet. Edits here replace the corresponding tab.</div>
+      <h1>Settings</h1>
+      <div class="sub">${isAdmin ? 'Display preferences, data sources, storage and master data.' : 'Display preferences for this device.'}</div>
       <div class="grid two">
-        <div class="panel"><h2>Machines</h2><p class="note">One per line: <code>Machine | Shifts</code> (e.g. <code>Halcyon | I,II,III</code>). Order = display order.</p>
-          <textarea id="adm-machines" rows="8">${esc(machinesTxt)}</textarea>
-          <div class="actions"><button class="btn primary" data-save="Machines" type="button">Save machines</button></div></div>
-        <div class="panel"><h2>Shift in charge list</h2><p class="note">One name per line, e.g. <code>(SGS) Salini G.S.</code></p>
-          <textarea id="adm-staff" rows="8">${esc(staffTxt)}</textarea>
-          <div class="actions"><button class="btn primary" data-save="Staff" type="button">Save staff</button></div></div>
-        <div class="panel"><h2>Workload per day</h2><p class="note"><code>Machine | Shift | Patients per day</code></p>
-          <textarea id="adm-workload" rows="8">${esc(workloadTxt)}</textarea>
-          <div class="actions"><button class="btn primary" data-save="Workload" type="button">Save workload</button></div></div>
+        <div class="panel"><h2>Display</h2>
+          <div class="field"><label for="set-font">Font</label>
+            <select id="set-font">
+              <option value="default" ${font === 'default' ? 'selected' : ''}>Default (system sans-serif)</option>
+              <option value="courier" ${font === 'courier' ? 'selected' : ''}>Courier New</option>
+            </select></div>
+          <p class="note" style="margin-top:8px">Saved on this device and browser only, so each person can choose their own.</p>
+        </div>
+        <div class="panel"><h2>About this app</h2>
+          <table class="info"><tbody>
+            <tr><td class="tech">Application</td><td>UNITY: Monthly RT Treatment Tracker</td></tr>
+            <tr><td class="tech">Version</td><td>v${esc(rel.version || '?')}</td></tr>
+            <tr><td class="tech">Released</td><td>${esc(fmtDate(rel.date))}</td></tr>
+            <tr><td class="tech">Department</td><td>${esc(state.cfg.settings.department || '')}</td></tr>
+            <tr><td class="tech">Signed in as</td><td>${isAdmin ? 'Admin' : 'Staff'}</td></tr>
+          </tbody></table>
+          <div class="actions"><a class="btn" href="help.html" target="_blank" rel="noopener">Help, about &amp; user manual</a></div>
+        </div>
+      </div>
+      ${isAdmin ? `
+      <h2 style="margin-top:8px">Data sources &amp; import</h2>
+      <div class="panel">
+        <p class="note">The old “Monthly RT Tx Report” Google Sheets that UNITY copies data from. UNITY <b>only reads</b> them.
+          For a yearly sheet enter its <b>Year</b>; leave Year empty for the live sheet (the year is then taken from each submission’s date).
+          The first submission per machine/shift/month is used (same as the old sheets). Entries created or edited in UNITY are never overwritten. Importing again never creates duplicates.</p>
+        <div class="table-wrap"><table id="src-table">
+          <thead><tr><th>Label</th><th>Spreadsheet ID or URL</th><th>Year</th><th>Hourly sync</th><th>Active</th><th>Last import</th><th></th><th></th></tr></thead>
+          <tbody><tr><td colspan="8" class="loading">Loading…</td></tr></tbody></table></div>
+        <div class="actions">
+          <button class="btn" id="src-add" type="button">+ Add source</button>
+          <button class="btn" id="src-save" type="button">Save sources</button>
+          <button class="btn primary" id="src-import-all" type="button">Import all active sources</button>
+        </div>
+        <pre id="src-out" class="note" style="white-space:pre-wrap;margin:10px 0 0"></pre>
+      </div>
+      <div class="grid two">
         <div class="panel"><h2>Hourly sync from Google Form</h2>
-          <p class="note">While staff still use the old Google Form, UNITY can copy new submissions from the live “Monthly RT Tx Report” sheet every hour. It <b>only reads</b> that sheet. Entries edited in UNITY are never overwritten.</p>
+          <p class="note">Every hour, re-reads the sources marked <b>Hourly sync</b> (normally the live sheet) so Google Form submissions appear in UNITY.</p>
           <p>Status: <b id="adm-sync-status">checking…</b></p>
           <div class="actions"><button class="btn primary" id="adm-sync-on" type="button" hidden>Turn on hourly sync</button>
             <button class="btn danger" id="adm-sync-off" type="button" hidden>Turn off hourly sync</button></div></div>
-        <div class="panel"><h2>Import from legacy sheet</h2>
-          <p class="note">Reads the <b>DATA</b> tab of “Monthly RT Tx Report” and “2025_Monthly RT Tx Report” <b>without changing them</b>.
-          The first submission per machine/shift/month is copied into UNITY (same as the old sheet’s reports). Entries created or edited in UNITY are never overwritten. Safe to run repeatedly.</p>
-          <div class="actions"><button class="btn primary" id="adm-import" type="button">Run import</button></div>
-          <pre id="adm-import-out" class="note" style="white-space:pre-wrap"></pre></div>
-      </div>`);
+        <div class="panel"><h2>Storage (Google Sheets cell limit)</h2>
+          <div id="storage-box" class="loading">Checking…</div></div>
+      </div>
+      <h2 style="margin-top:8px">Master data</h2>
+      <div class="grid two">
+        <div class="panel"><h2>Machines</h2><p class="note">One per line: <code>Machine | Shifts | active</code> or <code>| decommissioned</code>. For example <code>Halcyon | I,II,III | active</code>.
+          Decommissioned machines keep their history in reports but are hidden from new entries.</p>
+          <textarea id="adm-machines" rows="8">Loading…</textarea>
+          <div class="actions"><button class="btn primary" data-save="Machines" type="button">Save machines</button></div></div>
+        <div class="panel"><h2>Shift in charge list</h2><p class="note">One name per line, e.g. <code>(SGS) Salini G.S.</code></p>
+          <textarea id="adm-staff" rows="8">${esc(state.cfg.staff.join('\n'))}</textarea>
+          <div class="actions"><button class="btn primary" data-save="Staff" type="button">Save staff</button></div></div>
+        <div class="panel"><h2>Workload per day</h2><p class="note"><code>Machine | Shift | Patients per day</code></p>
+          <textarea id="adm-workload" rows="8">${esc(state.cfg.machines.flatMap((m) => m.shifts.map((s) => `${m.name} | ${s} | ${state.cfg.workload[m.name + '|' + s] || 0}`)).join('\n'))}</textarea>
+          <div class="actions"><button class="btn primary" data-save="Workload" type="button">Save workload</button></div></div>
+      </div>` : ''}
+    `);
 
-    const lines = (id) => $(id).value.split('\n').map((l) => l.trim()).filter(Boolean);
-    const builders = {
-      Machines: () => lines('#adm-machines').map((l, i) => { const [n, s] = l.split('|').map((x) => (x || '').trim()); return { Name: n, Shifts: s || 'I,II,III', Order: i + 1, Active: true }; }),
-      Staff: () => lines('#adm-staff').map((n) => ({ Abbr: (n.match(/^\((\w+)\)/) || [, ''])[1], Name: n, Active: true })),
-      Workload: () => lines('#adm-workload').map((l) => { const [m, s, w] = l.split('|').map((x) => (x || '').trim()); return { Machine: m, Shift: s, PerDay: Number(w) || 0 }; })
+    $('#set-font').onchange = (e) => { window.UnityPrefs.setFont(e.target.value); toast('Font updated.'); };
+    if (!isAdmin) return;
+
+    // --- data sources ---
+    let sources = [];
+    const srcRow = (s, i) => `<tr data-i="${i}">
+      <td><input data-k="label" value="${esc(s.label)}" style="min-width:180px"></td>
+      <td><input data-k="id" value="${esc(s.id)}" style="min-width:220px" placeholder="Paste sheet URL or ID"></td>
+      <td><input data-k="year" type="number" min="2000" max="2100" value="${s.year || ''}" placeholder="auto" style="width:90px"></td>
+      <td style="text-align:center"><input data-k="hourly" type="checkbox" ${s.hourly ? 'checked' : ''} style="width:auto;min-height:0"></td>
+      <td style="text-align:center"><input data-k="active" type="checkbox" ${s.active !== false ? 'checked' : ''} style="width:auto;min-height:0"></td>
+      <td class="note" style="white-space:normal;min-width:200px">${s.lastImport ? esc(fmtDateTime(s.lastImport)) + '<br>' + esc(s.lastResult) : 'never'}</td>
+      <td>${s.id && s.saved ? `<button class="btn small" data-import="${i}" type="button">Import</button>` : ''}</td>
+      <td><button class="btn danger small" data-remove="${i}" type="button" title="Remove">✕</button></td></tr>`;
+    const readSources = () => $$('#src-table tbody tr[data-i]').map((tr) => {
+      const g = (k) => tr.querySelector(`[data-k="${k}"]`);
+      return { label: g('label').value.trim(), id: g('id').value.trim(), year: g('year').value, hourly: g('hourly').checked, active: g('active').checked };
+    });
+    const drawSources = () => {
+      $('#src-table tbody').innerHTML = sources.length ? sources.map(srcRow).join('') : '<tr><td colspan="8" class="empty">No sources.</td></tr>';
+      $$('[data-remove]').forEach((b) => b.onclick = () => { sources = readSources().map((s, i) => ({ ...sources[i], ...s })); sources.splice(Number(b.dataset.remove), 1); drawSources(); });
+      $$('[data-import]').forEach((b) => b.onclick = () => runImport(sources[Number(b.dataset.import)].id, b));
     };
-    $$('[data-save]').forEach((b) => b.addEventListener('click', async () => {
-      const table = b.dataset.save;
-      b.disabled = true;
+    const loadSources = async () => { sources = (await guarded(() => API.call('sources'))).map((s) => ({ ...s, saved: true })); drawSources(); };
+    const runImport = async (sourceId, btn) => {
+      btn.disabled = true; const label = btn.textContent; btn.textContent = 'Importing…';
+      $('#src-out').textContent = 'Importing… this can take up to a minute per sheet.';
       try {
-        state.cfg = await guarded(() => API.call('saveConfig', { table, rows: builders[table]() }));
-        toast(table + ' saved.');
-      } finally { b.disabled = false; }
-    }));
+        const res = await guarded(() => API.call('importLegacy', sourceId ? { sourceId } : {}));
+        $('#src-out').textContent = res.map((r) => r.error ? `${r.source}: ERROR ${r.error}` : `${r.source}: ${r.added} added, ${r.updated} updated, ${r.unchanged} unchanged (${r.legacyRows} rows read)`).join('\n');
+        state.cfg = await API.call('bootstrap');
+        await loadSources(); loadStorage(); loadMachines();
+        toast('Import finished.');
+      } catch (e) { $('#src-out').textContent = 'Import failed: ' + e.message; }
+      finally { btn.disabled = false; btn.textContent = label; }
+    };
+    $('#src-add').onclick = () => { sources = readSources().map((s, i) => ({ ...sources[i], ...s })); sources.push({ label: '', id: '', year: '', hourly: false, active: true }); drawSources(); };
+    $('#src-save').onclick = async (e) => {
+      e.currentTarget.disabled = true;
+      try { sources = (await guarded(() => API.call('saveSources', { rows: readSources() }))).map((s) => ({ ...s, saved: true })); drawSources(); toast('Sources saved.'); }
+      finally { e.currentTarget.disabled = false; }
+    };
+    $('#src-import-all').onclick = (e) => runImport(null, e.currentTarget);
+    loadSources();
+
+    // --- hourly sync ---
     const showSync = (on) => {
-      $('#adm-sync-status').textContent = on ? 'ON — runs every hour' : 'OFF';
+      $('#adm-sync-status').textContent = on ? 'ON: runs every hour' : 'OFF';
       $('#adm-sync-status').style.color = on ? 'var(--ok)' : '#ff8aa0';
       $('#adm-sync-on').hidden = on; $('#adm-sync-off').hidden = !on;
     };
@@ -522,18 +593,87 @@
     $('#adm-sync-on').onclick = (e) => setSync(true, e.currentTarget);
     $('#adm-sync-off').onclick = (e) => setSync(false, e.currentTarget);
     API.call('legacySync', {}).then((r) => showSync(r.enabled)).catch((e) => { $('#adm-sync-status').textContent = 'unknown (' + e.message + ')'; });
-    $('#adm-import').onclick = async () => {
-      const b = $('#adm-import'); b.disabled = true; b.textContent = 'Importing…';
-      try {
-        const res = await guarded(() => API.call('importLegacy'));
-        $('#adm-import-out').textContent = res.map((r) => r.error ? `${r.source}: ERROR ${r.error}` : `${r.source}: ${r.added} added, ${r.updated} updated, ${r.unchanged} unchanged (${r.legacyRows} legacy rows read)`).join('\n');
-        state.cfg = await API.call('bootstrap');
-        toast('Import finished.');
-      } finally { b.disabled = false; b.textContent = 'Run import'; }
+
+    // --- storage ---
+    const drawStorage = (st) => {
+      const pct = st.percentUsed;
+      const color = pct >= 80 ? 'var(--red)' : pct >= 50 ? 'var(--warn)' : 'var(--cyan)';
+      const verdict = pct >= 80 ? 'Plan a new database sheet soon.' : pct >= 50 ? 'Fine for now; keep an eye on it.' : 'Plenty of space. No new sheet needed.';
+      $('#storage-box').className = '';
+      $('#storage-box').innerHTML = `
+        <div class="kpi" style="margin-bottom:10px"><div class="label">Space available</div>
+          <div class="value">${st.percentFree.toLocaleString('en-IN')}%</div>
+          <div class="hint">${fmt(st.cells)} of ${fmt(st.limit)} cells allocated (${pct}% used). ${verdict}</div></div>
+        <div class="progress" title="${pct}% used"><div style="width:${Math.max(pct, 0.5)}%;background:${color}"></div></div>
+        <p class="note">${fmt(st.entries)} entries over ${st.yearsOfData} year(s) ≈ ${fmt(st.cellsPerYear)} cells per year of data${st.yearsLeft != null ? `, so roughly <b>${fmt(st.yearsLeft)} more years</b> fit at this rate` : ''}.
+          Google counts every cell in each tab's grid, including empty ones, so <b>Optimise</b> trims unused empty rows and columns. No data is changed.</p>
+        <details><summary class="note" style="cursor:pointer">Per-tab breakdown</summary>
+          <div class="table-wrap" style="margin-top:8px"><table>
+            <thead><tr><th>Tab</th><th class="num">Data rows</th><th class="num">Grid (rows × cols)</th><th class="num">Cells</th></tr></thead>
+            <tbody>${st.tabs.map((t) => `<tr><td class="tech">${esc(t.name)}</td><td class="num">${fmt(t.dataRows)}</td><td class="num">${fmt(t.rows)} × ${t.cols}</td><td class="num">${fmt(t.cells)}</td></tr>`).join('')}</tbody>
+          </table></div></details>
+        <div class="actions"><button class="btn" id="st-refresh" type="button">Refresh</button><button class="btn" id="st-opt" type="button">Optimise (free empty cells)</button></div>
+        <p class="note">Checked ${esc(fmtDateTime(st.checkedAt))}${st.freedCells != null ? ` · freed ${fmt(st.freedCells)} cells` : ''}</p>`;
+      $('#st-refresh').onclick = loadStorage;
+      $('#st-opt').onclick = async (e) => {
+        if (!(await confirmBox('Optimise storage', 'Remove empty rows and columns beyond the data in every tab of the UNITY sheet? Your data is not changed.', 'Optimise'))) return;
+        e.currentTarget.disabled = true;
+        try { drawStorage(await guarded(() => API.call('optimiseStorage'))); toast('Storage optimised.'); } catch (_) { /* toast shown */ }
+      };
     };
+    async function loadStorage() {
+      try { drawStorage(await API.call('storage')); } catch (e) { $('#storage-box').textContent = 'Could not check storage: ' + e.message; }
+    }
+    loadStorage();
+
+    // --- master data ---
+    async function loadMachines() {
+      try {
+        const all = await API.call('allMachines');
+        $('#adm-machines').value = all.map((m) => `${m.name} | ${m.shifts} | ${m.active ? 'active' : 'decommissioned'}`).join('\n');
+      } catch (e) { $('#adm-machines').value = ''; toast(e.message, true); }
+    }
+    loadMachines();
+    const lines = (id) => $(id).value.split('\n').map((l) => l.trim()).filter(Boolean);
+    const builders = {
+      Machines: () => lines('#adm-machines').map((l, i) => { const [n, s, a] = l.split('|').map((x) => (x || '').trim()); return { Name: n, Shifts: s || 'I,II,III', Order: i + 1, Active: !/^(decommissioned|inactive|no|false)$/i.test(a || '') }; }),
+      Staff: () => lines('#adm-staff').map((n) => ({ Abbr: (n.match(/^\((\w+)\)/) || [, ''])[1], Name: n, Active: true })),
+      Workload: () => lines('#adm-workload').map((l) => { const [m, s, w] = l.split('|').map((x) => (x || '').trim()); return { Machine: m, Shift: s, PerDay: Number(w) || 0 }; })
+    };
+    $$('[data-save]').forEach((b) => b.addEventListener('click', async () => {
+      const table = b.dataset.save;
+      b.disabled = true;
+      try {
+        state.cfg = await guarded(() => API.call('saveConfig', { table, rows: builders[table]() }));
+        toast(table + ' saved.');
+      } finally { b.disabled = false; }
+    }));
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso + (String(iso).length === 10 ? 'T00:00:00' : ''));
+    return isNaN(d) ? iso : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  function fmtDateTime(iso) {
+    const d = new Date(iso);
+    return isNaN(d) ? String(iso || '') : d.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+  function renderFooter() {
+    const rel = (state.cfg && state.cfg.release) || {};
+    $('#app-footer').innerHTML = `UNITY v${esc(rel.version || '')} · Released ${esc(fmtDate(rel.date))} · Division of Radiation Physics, RCC Thiruvananthapuram · <a href="help.html" target="_blank" rel="noopener">Help</a>`;
   }
 
   // ---------- boot ----------
+  // Version on the login screen (public ping, no key needed).
+  (async function loginVersion() {
+    try {
+      const url = window.UNITY_CONFIG.API_URL;
+      if (!url || url.includes('REPLACE_WITH')) return;
+      const r = await (await fetch(url + (url.includes('?') ? '&' : '?') + 'action=ping')).json();
+      if (r && r.version) $('#login-version').textContent = `UNITY v${r.version} · Released ${fmtDate(r.releaseDate)}`;
+    } catch (e) { /* offline: keep plain label */ }
+  })();
   (async function boot() {
     const key = API.getKey();
     if (!key) { $('#login-view').hidden = false; return; }
