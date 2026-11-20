@@ -36,6 +36,7 @@ window.UnityHelp = {
       <a class="sub" href="#dashboard" data-sec="dashboard">Dashboard</a>
       <a href="#settings" data-sec="settings">Settings</a>
       <a class="sub" href="#display" data-sec="display">Display &amp; font</a>
+      <a class="sub" href="#features" data-sec="features">Show/hide New entry</a>
       <a class="sub" href="#sources" data-sec="sources">Data sources &amp; import</a>
       <a class="sub" href="#sync" data-sec="sync">Hourly sync</a>
       <a class="sub" href="#storage" data-sec="storage">Storage</a>
@@ -120,6 +121,10 @@ window.UnityHelp = {
       <section id="settings">
         <h2>Settings</h2>
         <p>Settings is divided into sections. Click a section title to expand or collapse it; UNITY remembers which sections you keep open. Everyone can change the <b>Display</b> options. The other sections are visible only with the admin key.</p>
+
+        <h3 id="features">Features: showing or hiding “New entry”</h3>
+        <p>While staff still use the Google Form, the <b>New entry</b> tab can be hidden for everyone: <b>Settings → Features</b>, untick <b>Show the “New entry” tab</b>.
+          Tick it again when you are ready to enter figures in UNITY. Correcting existing entries from the <b>Entries</b> page works either way.</p>
 
         <h3 id="display">Display and font</h3>
         <p>Choose <b>Default</b> or <b>Courier New</b>. The choice is saved on this device and browser only, so each person can pick their own. It also applies to this help page.</p>

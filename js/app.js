@@ -140,6 +140,7 @@
     $('#role-badge').textContent = state.role === 'admin' ? 'Admin' : 'Staff';
     if (state.cfg.settings.department) $('#dept-line').textContent = state.cfg.settings.department;
     renderFooter();
+    applyFeatures();
     route();
   }
 
@@ -148,6 +149,10 @@
   function route() {
     if (!state.role) return;
     const [, name = 'dashboard', ...args] = (location.hash || '#/dashboard').split('/');
+    if (name === 'entry' && !newEntryOn() && !(state.editing && state.editing.id)) {
+      state.editing = null;
+      location.replace('#/status'); return;
+    }
     const view = VIEWS[name] || viewDashboard;
     state.seq++;
     $$('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.view === name));
@@ -332,7 +337,7 @@
       <div class="status-grid">
         ${Object.keys(byMachine).map((m) => `<div class="machine-card"><h3>${esc(m)}</h3>
           ${byMachine[m].map((s) => `<div class="slot"><span>Shift ${esc(s.shift)}${s.submitted ? `<br><small class="note">${esc(s.shiftInCharge)} · ${fmt(s.patients)} pts · ${fmt(s.sittings)} sittings</small>` : ''}</span>
-            ${s.submitted ? '<span class="pill ok">Received</span>' : `<a class="pill miss" href="#/entry" data-prefill="${esc(m)}|${esc(s.shift)}">Pending</a>`}</div>`).join('')}
+            ${s.submitted ? '<span class="pill ok">Received</span>' : (newEntryOn() ? `<a class="pill miss" href="#/entry" data-prefill="${esc(m)}|${esc(s.shift)}">Pending</a>` : '<span class="pill miss">Pending</span>')}</div>`).join('')}
         </div>`).join('')}
       </div>`);
     const go = () => { location.hash = `#/status/${$('#s-year').value}/${$('#s-month').value}`; };
@@ -549,6 +554,12 @@
           <div class="actions"><a class="btn" href="#/help">Help, about &amp; user manual</a></div>`,
         `v${esc(rel.version || '?')} · ${esc(fmtDate(rel.date))}`)}
       ${isAdmin ? `
+      ${sect('features', 'Features', `
+          <label class="switch-row"><input type="checkbox" id="feat-newentry" ${newEntryOn() ? 'checked' : ''}>
+            <span><b>Show the “New entry” tab</b><br><span class="note">Turn on when staff start entering monthly figures in UNITY instead of the Google Form.
+            While it is off, the tab is hidden for everyone and “Pending” on the Submission status page is not a link.
+            Correcting existing entries from the Entries page still works.</span></span></label>`,
+        newEntryOn() ? 'New entry: shown' : 'New entry: hidden')}
       ${sect('sources', 'Data sources &amp; import', `
         <p class="note">The old “Monthly RT Tx Report” Google Sheets that UNITY copies data from. UNITY <b>only reads</b> them.
           For a yearly sheet enter its <b>Year</b>; leave Year empty for the live sheet (the year is then taken from each submission’s date).
@@ -584,6 +595,17 @@
     $$('details.sect').forEach((d) => d.addEventListener('toggle', () => {
       try { localStorage.setItem('unity.sect.' + d.dataset.sect, d.open ? '1' : '0'); } catch (e) {}
       syncAllBtn();
+    if ($('#feat-newentry')) $('#feat-newentry').onchange = async (e) => {
+      const box = e.currentTarget, on = box.checked;
+      box.disabled = true;
+      try {
+        state.cfg = await guarded(() => API.call('setAppSetting', { settingKey: 'ShowNewEntry', value: on })); saveCfg();
+        applyFeatures();
+        $('#hint-features').textContent = newEntryOn() ? 'New entry: shown' : 'New entry: hidden';
+        toast(newEntryOn() ? 'The New entry tab is now shown.' : 'The New entry tab is now hidden.');
+      } catch (err) { box.checked = !on; }
+      finally { box.disabled = false; }
+    };
     }));
     $('#sect-all').onclick = () => { const open = !$$('details.sect').every((d) => d.open); $$('details.sect').forEach((d) => { d.open = open; }); };
     syncAllBtn();
@@ -721,9 +743,14 @@
     const d = new Date(iso);
     return isNaN(d) ? String(iso || '') : d.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
+  function newEntryOn() { return !state.cfg || !state.cfg.settings || state.cfg.settings.showNewEntry !== false; }
+  function applyFeatures() {
+    const link = $('#tabs a[data-view="entry"]');
+    if (link) link.hidden = !newEntryOn();
+  }
   function renderFooter() {
     const rel = (state.cfg && state.cfg.release) || {};
-    $('#app-footer').innerHTML = `UNITY v${esc(rel.version || '')} · Released ${esc(fmtDate(rel.date))} · Division of Radiation Physics, RCC Thiruvananthapuram · <a href="#/help">Help</a>`;
+    $('#app-footer').innerHTML = `UNITY v${esc(rel.version || '')} · Released ${esc(fmtDate(rel.date))} · Division of Radiation Physics, RCC Thiruvananthapuram`;
   }
 
   // ---------- boot ----------
@@ -767,7 +794,7 @@
       state.role = data.role; state.cfg = data.config;
       saveCfg();
       if (!saved) startApp();
-      else if (changed) { document.body.classList.toggle('is-admin', state.role === 'admin'); renderFooter(); }
+      else if (changed) { document.body.classList.toggle('is-admin', state.role === 'admin'); renderFooter(); applyFeatures(); }
       warmUp();
     } catch (e) {
       if (e.auth) { logout(); showLogin(); $('#login-error').textContent = e.message; $('#login-error').hidden = false; return; }

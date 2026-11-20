@@ -72,6 +72,8 @@ details.sect > summary:hover { background: var(--teal-3); }
 details.sect > summary:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
 details.sect .sect-hint { margin-left: auto; font-size: 13px; font-weight: 400; color: var(--muted); }
 details.sect .sect-body { padding: 4px 16px 16px; }
+.switch-row { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; max-width: 760px; }
+.switch-row input[type=checkbox] { width: 20px; height: 20px; min-height: 0; margin-top: 2px; flex: none; accent-color: var(--cyan); }
 table.info td { white-space: normal; }
 .grid.kpis { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 .grid.two { grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); }
