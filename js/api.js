@@ -1,27 +1,32 @@
 /* Minimal client for the UNITY Apps Script API.
  * text/plain POST avoids a CORS pre-flight, which Apps Script cannot answer. */
 (function () {
-  const KEY_STORE = 'unity.key';
+  const TOKEN_STORE = 'unity.token';
+  try { localStorage.removeItem('unity.key'); sessionStorage.removeItem('unity.key'); } catch (e) {} // old shared keys
 
-  function getKey() {
-    try { return localStorage.getItem(KEY_STORE) || sessionStorage.getItem(KEY_STORE) || ''; } catch (e) { return ''; }
+  function readToken() {
+    try { return localStorage.getItem(TOKEN_STORE) || sessionStorage.getItem(TOKEN_STORE) || ''; } catch (e) { return ''; }
   }
-  function setKey(key, remember) {
+  function remembered() {
+    try { return !!localStorage.getItem(TOKEN_STORE); } catch (e) { return false; }
+  }
+  /** remember = keep across browser restarts (localStorage) vs this browser session only. */
+  function setToken(token, remember) {
     try {
-      localStorage.removeItem(KEY_STORE); sessionStorage.removeItem(KEY_STORE);
-      if (key) (remember ? localStorage : sessionStorage).setItem(KEY_STORE, key);
-    } catch (e) { /* storage blocked: key lives in memory only */ }
-    memKey = key;
+      localStorage.removeItem(TOKEN_STORE); sessionStorage.removeItem(TOKEN_STORE);
+      if (token) (remember ? localStorage : sessionStorage).setItem(TOKEN_STORE, token);
+    } catch (e) { /* storage blocked: token lives in memory only */ }
+    memToken = token;
   }
-  let memKey = getKey();
+  let memToken = readToken();
   // Server data version: every response carries it; when it changes, cached pages are stale.
   let dataVersion = null;
   const versionListeners = [];
 
-  async function call(action, params = {}, keyOverride) {
+  async function call(action, params = {}) {
     const url = window.UNITY_CONFIG.API_URL;
     if (!url || url.includes('REPLACE_WITH')) throw new Error('API URL not configured (js/config.js).');
-    const body = JSON.stringify({ action, key: keyOverride || memKey, ...params });
+    const body = JSON.stringify({ action, token: memToken, ...params });
     let res;
     try {
       res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body, redirect: 'follow' });
@@ -34,6 +39,7 @@
       const prev = dataVersion; dataVersion = json.v;
       if (prev !== null) versionListeners.forEach((fn) => { try { fn(json.v); } catch (e) {} });
     }
+    if (json.token) setToken(json.token, remembered());   // sliding session renewal
     if (!json.ok) {
       const err = new Error(String(json.error || 'Request failed').replace(/^AUTH:\s*/, ''));
       err.auth = /^AUTH:/.test(json.error || '');
@@ -42,5 +48,5 @@
     return json.data;
   }
 
-  window.UnityAPI = { call, getKey: () => memKey, setKey, onVersionChange: (fn) => versionListeners.push(fn) };
+  window.UnityAPI = { call, getToken: () => memToken, setToken, remembered, onVersionChange: (fn) => versionListeners.push(fn) };
 })();

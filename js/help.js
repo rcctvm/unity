@@ -41,7 +41,7 @@ window.UnityHelp = {
       <a class="sub" href="#sync" data-sec="sync">Hourly sync</a>
       <a class="sub" href="#storage" data-sec="storage">Storage</a>
       <a class="sub" href="#master" data-sec="master">Machines, staff, workload</a>
-      <a class="sub" href="#keys" data-sec="keys">Access keys</a>
+      <a class="sub" href="#keys" data-sec="keys">Users &amp; passwords</a>
       <a href="#rules" data-sec="rules">Data rules</a>
       <a href="#codes" data-sec="codes">Technique codes</a>
       <a href="#faq" data-sec="faq">FAQ &amp; troubleshooting</a>
@@ -69,11 +69,12 @@ window.UnityHelp = {
         <h2>Getting started</h2>
         <ol>
           <li>Open UNITY at <a href="./#/dashboard">rcctvm.github.io/unity</a>. It works on desktop computers and phones.</li>
-          <li>Enter your <b>access key</b> and click <b>Sign in</b>. Ask the Radiation Physics administrator for the key.
+          <li>Enter your <b>user name</b> and <b>password</b> and click <b>Sign in</b>. An administrator creates your account.
             <ul>
-              <li><b>Staff key</b>: enter monthly figures, edit entries, view and print reports.</li>
-              <li><b>Admin key</b>: everything above, plus deleting entries and all Settings.</li>
+              <li><b>Staff</b>: view and print reports, correct entries (and enter monthly figures when New entry is switched on).</li>
+              <li><b>Admin</b>: everything above, plus deleting entries, managing users and all Settings.</li>
             </ul></li>
+          <li>Change your own password any time: <b>Settings → My account</b>.</li>
           <li>Tick <b>Remember on this device</b> only on your own computer or phone. On shared computers, leave it unticked and click <b>Sign out</b> when you finish.</li>
         </ol>
         <div class="tip">The menu at the top takes you to every page, including this Help page. The footer shows the UNITY version and release date. Pages you have already opened appear instantly and refresh themselves in the background.</div>
@@ -157,10 +158,19 @@ window.UnityHelp = {
           <li><b>Workload per day</b>: <code>Machine | Shift | number</code>, shown as reference figures in reports.</li>
         </ul>
 
-        <h3 id="keys">Access keys</h3>
-        <p>The staff and admin keys are kept in the Apps Script project, not in the website:
-          <b>script.google.com → UNITY → Project Settings → Script Properties</b> → <code>UNITY_USER_KEY</code> (staff) and <code>UNITY_ADMIN_KEY</code> (admin).
-          Change a value and click <b>Save script properties</b>; it takes effect immediately. Share the admin key only with administrators.</p>
+        <h3 id="keys">Users and passwords</h3>
+        <ul>
+          <li><b>Settings → My account</b> (everyone): change your own user name and/or password. Your current password is required.</li>
+          <li><b>Settings → Users</b> (admins): <b>+ Add user</b> with a user name, role and password; <b>Edit</b> to rename a user, change their role,
+            disable them or set a new password; <b>Delete</b> to remove them. User names are lower-case (letters, numbers, dot, dash, underscore).</li>
+          <li>Passwords must be at least 8 characters. They are stored only in hashed form, so nobody can look them up — if someone forgets theirs, an admin sets a new one.</li>
+          <li>Changing a password, renaming or disabling a user signs that user out on every device.</li>
+          <li>There must always be at least one active admin; UNITY will not let you delete, disable or demote the last one.</li>
+          <li>After 5 wrong passwords a user name is locked for 15 minutes.</li>
+          <li><b>All admins locked out?</b> In <b>script.google.com → UNITY → Project Settings → Script Properties</b>, add
+            <code>UNITY_RESET_ADMIN_PASSWORD</code> with a new password and save. On the next visit, user <code>admin</code> gets that password
+            (and admin rights) and the property is removed automatically.</li>
+        </ul>
       </section>
 
       <section id="rules">
@@ -196,8 +206,10 @@ window.UnityHelp = {
 
       <section id="faq">
         <h2>FAQ and troubleshooting</h2>
-        <h3>“Invalid access key”</h3>
-        <p>Check capitals and spaces. If the keys were changed, ask the administrator for the new one.</p>
+        <h3>“Invalid user name or password”</h3>
+        <p>Passwords are case-sensitive. If you have forgotten yours, ask an admin to set a new one (Settings → Users → Edit).</p>
+        <h3>“Please sign in again”</h3>
+        <p>Your session ended: it expired, or your password or user name was changed. Sign in again.</p>
         <h3>“Cannot reach the UNITY server”</h3>
         <p>Check your internet connection and try again. On hospital networks that block Google services, ask IT to allow <code>script.google.com</code> and <code>script.googleusercontent.com</code>.</p>
         <h3>I submitted the wrong numbers</h3>

@@ -45,7 +45,7 @@
     return API.call(action, params).then((data) => cache.set(key, { data, at: Date.now() })).catch(() => {});
   }
   function saveCfg() {
-    try { localStorage.setItem('unity.cfg', JSON.stringify({ role: state.role, cfg: state.cfg })); } catch (e) {}
+    try { localStorage.setItem('unity.cfg', JSON.stringify({ role: state.role, username: state.username, cfg: state.cfg })); } catch (e) {}
   }
 
   // ---------- helpers ----------
@@ -106,28 +106,30 @@
   }
 
   // ---------- auth ----------
-  async function login(key, remember) {
-    const data = await API.call('login', {}, key);
-    API.setKey(key, remember);
+  async function login(username, password, remember) {
+    const data = await API.call('login', { username, password, remember });
+    API.setToken(data.token, remember);
     state.role = data.role;
+    state.username = data.username;
     state.cfg = data.config;
     saveCfg();
     startApp();
     warmUp();
   }
   function logout() {
-    API.setKey('', false);
+    API.setToken('', false);
     cache.clear();
     try { localStorage.removeItem('unity.cfg'); } catch (e) {}
-    state.role = null;
+    state.role = null; state.username = '';
     $('#login-key').value = '';
+    history.replaceState(null, '', '#/dashboard');   // next person starts on the Dashboard
     showLogin();
   }
   $('#login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = $('#login-btn'), err = $('#login-error');
     btn.disabled = true; btn.textContent = 'Signing in…'; err.hidden = true;
-    try { await login($('#login-key').value.trim(), $('#login-remember').checked); }
+    try { await login($('#login-user').value.trim(), $('#login-key').value, $('#login-remember').checked); $('#login-key').value = ''; }
     catch (ex) { err.textContent = ex.message; err.hidden = false; }
     finally { btn.disabled = false; btn.textContent = 'Sign in'; }
   });
@@ -137,7 +139,7 @@
     $('#login-view').hidden = true;
     $('#app-view').hidden = false;
     document.body.classList.toggle('is-admin', state.role === 'admin');
-    $('#role-badge').textContent = state.role === 'admin' ? 'Admin' : 'Staff';
+    renderBadge();
     if (state.cfg.settings.department) $('#dept-line').textContent = state.cfg.settings.department;
     renderFooter();
     applyFeatures();
@@ -543,6 +545,15 @@
             </select></div>
           <p class="note" style="margin-top:8px">Saved on this device and browser only, so each person can choose their own.</p>`,
         font === 'courier' ? 'Courier New' : 'Default font')}
+      ${sect('account', 'My account', `
+          <form id="me-form" class="form-grid" style="max-width:760px" autocomplete="off">
+            <div class="field"><label for="me-name">User name</label><input id="me-name" value="${esc(state.username || '')}" autocomplete="username" autocapitalize="none" spellcheck="false"></div>
+            <div class="field"><label for="me-pw">New password <span class="note">(leave empty to keep)</span></label><input id="me-pw" type="password" autocomplete="new-password"></div>
+            <div class="field"><label for="me-pw2">Confirm new password</label><input id="me-pw2" type="password" autocomplete="new-password"></div>
+            <div class="field"><label for="me-cur">Current password <span class="note">(required)</span></label><input id="me-cur" type="password" autocomplete="current-password"></div>
+          </form>
+          <div class="actions"><button class="btn primary" id="me-save" type="button">Save my account</button></div>`,
+        `${esc(state.username || '')} · ${state.role === 'admin' ? 'Admin' : 'Staff'}`)}
       ${sect('about', 'About this app', `
           <table class="info" style="max-width:640px"><tbody>
             <tr><td class="tech">Application</td><td>UNITY: Monthly RT Treatment Tracker</td></tr>
@@ -560,6 +571,32 @@
             While it is off, the tab is hidden for everyone and “Pending” on the Submission status page is not a link.
             Correcting existing entries from the Entries page still works.</span></span></label>`,
         newEntryOn() ? 'New entry: shown' : 'New entry: hidden')}
+      ${sect('users', 'Users', `
+          <p class="note">Everyone signs in with their own user name and password. <b>Admin</b> can do everything, including Settings;
+            <b>Staff</b> can view reports and correct entries. Passwords are stored only in encrypted (hashed) form, so nobody can read them,
+            not even admins. To help someone who forgot their password, set a new one for them here.</p>
+          <div class="table-wrap"><table id="users-table" class="fit">
+            <thead><tr><th>User name</th><th style="width:12%">Role</th><th style="width:12%">Status</th><th style="width:22%">Last sign-in</th><th style="width:150px"></th></tr></thead>
+            <tbody><tr><td colspan="5" class="loading">Loading…</td></tr></tbody></table></div>
+          <div class="actions"><button class="btn primary" id="user-add" type="button">+ Add user</button></div>
+          <dialog id="user-dialog">
+            <form method="dialog" id="user-form" autocomplete="off">
+              <h3 id="user-dialog-title">Add user</h3>
+              <input type="hidden" id="u-original">
+              <div class="field"><label for="u-name">User name</label><input id="u-name" required autocapitalize="none" spellcheck="false" placeholder="e.g. salini.gs"></div>
+              <div class="form-grid" style="margin-top:10px">
+                <div class="field"><label for="u-role">Role</label><select id="u-role"><option value="staff">Staff</option><option value="admin">Admin</option></select></div>
+                <div class="field"><label for="u-active">Status</label><select id="u-active"><option value="1">Active</option><option value="0">Disabled (cannot sign in)</option></select></div>
+              </div>
+              <div class="form-grid" style="margin-top:10px">
+                <div class="field"><label for="u-pw" id="u-pw-label">Password</label><input id="u-pw" type="password" autocomplete="new-password"></div>
+                <div class="field"><label for="u-pw2">Confirm password</label><input id="u-pw2" type="password" autocomplete="new-password"></div>
+              </div>
+              <p class="note" id="u-pw-note">At least 8 characters.</p>
+              <p id="u-error" style="color:#ff8aa0" hidden></p>
+              <div class="actions"><button class="btn" type="button" id="u-cancel">Cancel</button><button class="btn primary" type="submit" id="u-save">Save</button></div>
+            </form>
+          </dialog>`, 'Loading…')}
       ${sect('sources', 'Data sources &amp; import', `
         <p class="note">The old “Monthly RT Tx Report” Google Sheets that UNITY copies data from. UNITY <b>only reads</b> them.
           For a yearly sheet enter its <b>Year</b>; leave Year empty for the live sheet (the year is then taken from each submission’s date).
@@ -595,6 +632,23 @@
     $$('details.sect').forEach((d) => d.addEventListener('toggle', () => {
       try { localStorage.setItem('unity.sect.' + d.dataset.sect, d.open ? '1' : '0'); } catch (e) {}
       syncAllBtn();
+    $('#me-save').onclick = async (e) => {
+      const name = $('#me-name').value.trim().toLowerCase(), pw = $('#me-pw').value, pw2 = $('#me-pw2').value, cur = $('#me-cur').value;
+      if (!cur) return toast('Enter your current password to confirm the change.', true);
+      if (pw !== pw2) return toast('The new passwords do not match.', true);
+      if (pw && pw.length < 8) return toast('The new password must be at least 8 characters.', true);
+      if (name === state.username && !pw) return toast('Nothing to change.', true);
+      const btn = e.currentTarget; btn.disabled = true;
+      try {
+        const r = await guarded(() => API.call('updateMe', { currentPassword: cur, newUsername: name, newPassword: pw || undefined }));
+        API.setToken(r.token, API.remembered());
+        state.username = r.username; state.role = r.role; saveCfg(); renderBadge();
+        ['#me-pw', '#me-pw2', '#me-cur'].forEach((id) => { $(id).value = ''; });
+        $('#hint-account').textContent = `${r.username} · ${r.role === 'admin' ? 'Admin' : 'Staff'}`;
+        if (state.refreshUsers) state.refreshUsers();
+        toast('Your account was updated.');
+      } catch (err) { /* toast shown */ } finally { btn.disabled = false; }
+    };
     if ($('#feat-newentry')) $('#feat-newentry').onchange = async (e) => {
       const box = e.currentTarget, on = box.checked;
       box.disabled = true;
@@ -713,10 +767,74 @@
     async function loadMachines() {
       try { setMachines(await API.call('allMachines')); } catch (e) { $('#adm-machines').value = ''; toast(e.message, true); }
     }
+    // --- users ---
+    let users = [];
+    const setUsers = (list) => {
+      users = list;
+      const admins = list.filter((u) => u.role === 'admin' && u.active).length;
+      $('#hint-users').textContent = `${list.length} user(s), ${admins} admin`;
+      $('#users-table tbody').innerHTML = list.map((u, i) => `<tr>
+        <td class="tech">${esc(u.username)}${u.username === state.username ? ' <span class="note">(you)</span>' : ''}</td>
+        <td>${u.role === 'admin' ? 'Admin' : 'Staff'}</td>
+        <td>${u.active ? '<span class="pill ok">Active</span>' : '<span class="pill miss">Disabled</span>'}</td>
+        <td class="note">${u.lastLogin ? esc(fmtDateTime(u.lastLogin)) : 'never'}</td>
+        <td><button class="btn small" data-uedit="${i}" type="button">Edit</button>
+          ${u.username === state.username ? '' : `<button class="btn danger small" data-udel="${i}" type="button">Delete</button>`}</td></tr>`).join('')
+        || '<tr><td colspan="5" class="empty">No users.</td></tr>';
+      $$('[data-uedit]').forEach((b) => b.onclick = () => openUser(users[Number(b.dataset.uedit)]));
+      $$('[data-udel]').forEach((b) => b.onclick = async () => {
+        const u = users[Number(b.dataset.udel)];
+        if (!(await confirmBox('Delete user', `Delete the user “${u.username}”? They will no longer be able to sign in.`, 'Delete'))) return;
+        try { setUsers((await guarded(() => API.call('deleteUser', { username: u.username }))).users); toast('User deleted.'); } catch (e) { /* toast shown */ }
+      });
+    };
+    const openUser = (u) => {
+      $('#user-dialog-title').textContent = u ? `Edit user “${u.username}”` : 'Add user';
+      $('#u-original').value = u ? u.username : '';
+      $('#u-name').value = u ? u.username : '';
+      $('#u-role').value = u ? u.role : 'staff';
+      $('#u-active').value = !u || u.active ? '1' : '0';
+      $('#u-pw').value = ''; $('#u-pw2').value = '';
+      $('#u-pw-label').textContent = u ? 'New password (leave empty to keep)' : 'Password';
+      $('#u-pw-note').textContent = u ? 'Only fill this in to reset the password. At least 8 characters.' : 'At least 8 characters. Tell the user their password in person.';
+      $('#u-error').hidden = true;
+      $('#user-dialog').showModal();
+      $('#u-name').focus();
+    };
+    $('#user-add').onclick = () => openUser(null);
+    state.refreshUsers = () => API.call('users').then(setUsers).catch(() => {});
+    $('#u-cancel').onclick = () => $('#user-dialog').close();
+    $('#user-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const err = (m) => { $('#u-error').textContent = m; $('#u-error').hidden = false; };
+      const original = $('#u-original').value, pw = $('#u-pw').value;
+      const user = { original: original || undefined, username: $('#u-name').value.trim().toLowerCase(), role: $('#u-role').value, active: $('#u-active').value === '1' };
+      if (!user.username) return err('Enter a user name.');
+      if (!original && !pw) return err('Enter a password for the new user.');
+      if (pw && pw.length < 8) return err('The password must be at least 8 characters.');
+      if (pw !== $('#u-pw2').value) return err('The passwords do not match.');
+      if (pw) user.password = pw;
+      $('#u-save').disabled = true;
+      try {
+        const r = await API.call('saveUser', { user });
+        $('#user-dialog').close();
+        if (original && original === state.username) {
+          if (!r.me) { toast('Your account was disabled.', true); logout(); return; }
+          API.setToken(r.me.token, API.remembered()); state.username = r.me.username; state.role = r.me.role; saveCfg(); renderBadge();
+          if (r.me.role !== 'admin') { toast('You are no longer an admin.'); location.hash = '#/dashboard'; startApp(); return; }
+        }
+        setUsers(r.users);
+        toast(original ? 'User updated.' : 'User added.');
+      } catch (ex) {
+        if (ex.auth) { $('#user-dialog').close(); guarded(() => Promise.reject(ex)).catch(() => {}); return; }
+        err(ex.message);
+      } finally { $('#u-save').disabled = false; }
+    };
+
     // One request fills every admin section.
     guarded(() => API.call('settingsData')).then((d) => {
       if (!d || !$('#src-table')) return;
-      setSources(d.sources); showSync(d.syncOn); drawStorage(d.storage); setMachines(d.machines);
+      setSources(d.sources); showSync(d.syncOn); drawStorage(d.storage); setMachines(d.machines); setUsers(d.users || []);
     }).catch(() => {});
     const lines = (id) => $(id).value.split('\n').map((l) => l.trim()).filter(Boolean);
     const builders = {
@@ -747,6 +865,9 @@
   function applyFeatures() {
     const link = $('#tabs a[data-view="entry"]');
     if (link) link.hidden = !newEntryOn();
+  }
+  function renderBadge() {
+    $('#role-badge').textContent = (state.username ? state.username + ' · ' : '') + (state.role === 'admin' ? 'Admin' : 'Staff');
   }
   function renderFooter() {
     const rel = (state.cfg && state.cfg.release) || {};
@@ -779,22 +900,21 @@
     });
   }
   (async function boot() {
-    const key = API.getKey();
-    if (!key) { showLogin(); return; }
+    if (!API.getToken()) { showLogin(); return; }
     // Instant start from the configuration saved at the last visit; verify in the background.
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem('unity.cfg') || 'null'); } catch (e) {}
     if (saved && saved.cfg && saved.role) {
-      state.role = saved.role; state.cfg = saved.cfg;
+      state.role = saved.role; state.username = saved.username || ''; state.cfg = saved.cfg;
       startApp();
     }
     try {
-      const data = await API.call('login', {}, key);
-      const changed = !saved || saved.role !== data.role || JSON.stringify(saved.cfg) !== JSON.stringify(data.config);
-      state.role = data.role; state.cfg = data.config;
+      const data = await API.call('session');
+      const changed = !saved || saved.role !== data.role || saved.username !== data.username || JSON.stringify(saved.cfg) !== JSON.stringify(data.config);
+      state.role = data.role; state.username = data.username; state.cfg = data.config;
       saveCfg();
       if (!saved) startApp();
-      else if (changed) { document.body.classList.toggle('is-admin', state.role === 'admin'); renderFooter(); applyFeatures(); }
+      else if (changed) { document.body.classList.toggle('is-admin', state.role === 'admin'); renderBadge(); renderFooter(); applyFeatures(); }
       warmUp();
     } catch (e) {
       if (e.auth) { logout(); showLogin(); $('#login-error').textContent = e.message; $('#login-error').hidden = false; return; }
