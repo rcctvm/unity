@@ -644,6 +644,7 @@
         API.setToken(r.token, API.remembered());
         state.username = r.username; state.role = r.role; saveCfg(); renderBadge();
         ['#me-pw', '#me-pw2', '#me-cur'].forEach((id) => { $(id).value = ''; });
+        if (window.UnityPw) UnityPw.hideAll($('#me-form'));
         $('#hint-account').textContent = `${r.username} · ${r.role === 'admin' ? 'Admin' : 'Staff'}`;
         if (state.refreshUsers) state.refreshUsers();
         toast('Your account was updated.');
@@ -798,6 +799,7 @@
       $('#u-pw-label').textContent = u ? 'New password (leave empty to keep)' : 'Password';
       $('#u-pw-note').textContent = u ? 'Only fill this in to reset the password. At least 8 characters.' : 'At least 8 characters. Tell the user their password in person.';
       $('#u-error').hidden = true;
+      if (window.UnityPw) UnityPw.hideAll($('#user-dialog'));
       $('#user-dialog').showModal();
       $('#u-name').focus();
     };
@@ -885,6 +887,7 @@
     } catch (e) { /* offline: keep plain label */ }
   }
   function showLogin() {
+    if (window.UnityPw) UnityPw.hideAll($('#login-form'));
     $('#app-view').hidden = true;
     $('#login-view').hidden = false;
     loginVersion();
