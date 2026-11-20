@@ -88,11 +88,58 @@
     (withAll ? `<option value="">All machines</option>` : '<option value="">Select…</option>') +
     state.cfg.machines.map((m) => `<option ${m.name === sel ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
   function destroyCharts() { state.charts.forEach((c) => c.destroy()); state.charts = []; }
+  const valueLabelsPlugin = {
+    id: 'valueLabels',
+    afterDatasetsDraw(c, args, opts) {
+      if (!opts || !opts.mode) return;
+      const g = c.ctx, font = `10px ${getComputedStyle(document.body).fontFamily}`;
+      const fmtN = (v) => (Number(v) || 0).toLocaleString('en-IN');
+      // Dark or light text, whichever reads better on the segment colour.
+      const inkOn = (hex) => {
+        const h = String(hex).replace('#', ''); if (h.length < 6) return '#000';
+        const [r, gg, b] = [0, 2, 4].map((i) => parseInt(h.substr(i, 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+        return 0.2126 * r + 0.7152 * gg + 0.0722 * b > 0.25 ? '#00262c' : '#ffffff';
+      };
+      g.save(); g.font = font; g.textAlign = 'center';
+      // Text with a thin dark outline so it stays readable where it crosses a line or gridline.
+      const halo = (t, x, y) => { g.lineWidth = 3; g.lineJoin = 'round'; g.strokeStyle = 'rgba(8,42,49,.9)'; g.strokeText(t, x, y); g.fillText(t, x, y); };
+      if (opts.mode === 'stack') {
+        const n = c.data.labels.length, totals = new Array(n).fill(null), tops = new Array(n).fill(Infinity);
+        c.data.datasets.forEach((ds, di) => {
+          if (!c.isDatasetVisible(di)) return;
+          c.getDatasetMeta(di).data.forEach((el, i) => {
+            const v = ds.data[i]; if (v == null) return;
+            totals[i] = (totals[i] || 0) + v;
+            const { x, y, base } = el.getProps(['x', 'y', 'base'], true);
+            tops[i] = Math.min(tops[i], y);
+            if (v && Math.abs(base - y) >= 13) {          // only where the number fits inside the segment
+              g.fillStyle = inkOn(ds.backgroundColor); g.textBaseline = 'middle'; g.fillText(fmtN(v), x, (y + base) / 2);
+            }
+          });
+        });
+        g.fillStyle = '#ffffff'; g.textBaseline = 'bottom';
+        const meta0 = c.getDatasetMeta(c.data.datasets.findIndex((_, di) => c.isDatasetVisible(di)));
+        totals.forEach((t, i) => { if (t != null && meta0 && meta0.data[i]) halo(fmtN(t), meta0.data[i].x, tops[i] - 3); });
+      } else if (opts.mode === 'point') {
+        g.fillStyle = '#ffffff'; g.textBaseline = 'bottom';
+        c.data.datasets.forEach((ds, di) => c.getDatasetMeta(di).data.forEach((el, i) => {
+          if (ds.data[i] != null) halo(fmtN(ds.data[i]), el.x, el.y - 6);
+        }));
+      } else if (opts.mode === 'end') {
+        g.fillStyle = '#ffffff'; g.textAlign = 'left'; g.textBaseline = 'middle';
+        c.data.datasets.forEach((ds, di) => c.getDatasetMeta(di).data.forEach((el, i) => {
+          if (ds.data[i] != null) halo(fmtN(ds.data[i]), el.x + 5, el.y);
+        }));
+      }
+      g.restore();
+    }
+  };
   function chart(canvas, config) {
     if (!window.Chart) return;
     Chart.defaults.color = '#a9c7cd';
     Chart.defaults.borderColor = 'rgba(31,107,122,.5)';
     Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+    config.plugins = (config.plugins || []).concat(valueLabelsPlugin);
     state.charts.push(new Chart(canvas, config));
   }
   function setMain(html) { destroyCharts(); $('#main').innerHTML = html; }
@@ -198,21 +245,27 @@
     `);
     $('#dash-year').onchange = (e) => { location.hash = '#/dashboard/' + e.target.value; };
     const labels = MONTHS.map((m) => m.slice(0, 3));
+    // Months with no data at all (e.g. Nov–Dec of the current year) are left out, not drawn as 0.
+    const has = d.months.map((m) => m.patients > 0 || m.sittings > 0);
+    const gap = (arr) => arr.map((v, i) => (has[i] ? v : null));
     chart($('#c-patients'), {
       type: 'bar',
-      data: { labels, datasets: machineNames.map((m, i) => ({ label: m, data: d.machines[m].patients, backgroundColor: MACHINE_COLORS[i % MACHINE_COLORS.length], borderRadius: 3 })) },
-      options: { maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }, plugins: { legend: { position: 'bottom' } } }
+      data: { labels, datasets: machineNames.map((m, i) => ({ label: m, data: gap(d.machines[m].patients), backgroundColor: MACHINE_COLORS[i % MACHINE_COLORS.length], borderRadius: 3 })) },
+      options: { maintainAspectRatio: false, layout: { padding: { top: 16 } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+        plugins: { legend: { position: 'bottom' }, valueLabels: { mode: 'stack' } } }
     });
     chart($('#c-sittings'), {
       type: 'line',
-      data: { labels, datasets: [{ label: 'Sittings', data: d.months.map((m) => m.sittings), borderColor: '#ffff00', backgroundColor: 'rgba(255,255,0,.12)', fill: true, tension: .3, pointRadius: 3 }] },
-      options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }
+      data: { labels, datasets: [{ label: 'Sittings', data: gap(d.months.map((m) => m.sittings)), borderColor: '#ffff00', backgroundColor: 'rgba(255,255,0,.12)', fill: true, tension: .3, pointRadius: 3, spanGaps: false }] },
+      options: { maintainAspectRatio: false, layout: { padding: { top: 16 } }, scales: { y: { beginAtZero: true } },
+        plugins: { legend: { display: false }, valueLabels: { mode: 'point' } } }
     });
     const techs = state.cfg.techniques;
     chart($('#c-tech'), {
       type: 'bar',
       data: { labels: techs.map((t) => t.label), datasets: [{ label: 'Patients', data: techs.map((t) => d.techniques[t.key] || 0), backgroundColor: '#00ffff', borderRadius: 3 }] },
-      options: { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { beginAtZero: true } }, plugins: { legend: { display: false } } }
+      options: { indexAxis: 'y', maintainAspectRatio: false, layout: { padding: { right: 36 } }, scales: { x: { beginAtZero: true } },
+        plugins: { legend: { display: false }, valueLabels: { mode: 'end' } } }
     });
   }
 
