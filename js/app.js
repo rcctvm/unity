@@ -8,6 +8,7 @@
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmt = (n) => (Number(n) || 0).toLocaleString('en-IN');
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const MACHINE_COLORS = ['#00ffff', '#ffff00', '#e5173f', '#3ddc84', '#ff9f40', '#b48cff', '#ff6fd8'];
 
   const state = { role: null, cfg: null, charts: [], editing: null, seq: 0 };
 
@@ -169,16 +170,6 @@
     const s = state.cfg.settings;
     const busiest = d.months.reduce((b, m, i) => (m.patients > (b.v || 0) ? { v: m.patients, i } : b), {});
     const machineNames = Object.keys(d.machines);
-    // Months with no entries at all are gaps (null), not zeros — e.g. months still to come.
-    const has = d.months.map((m) => m.patients > 0 || m.sittings > 0);
-    const labels = MONTHS.map((m) => m.slice(0, 3));
-    const pat = d.months.map((m, i) => (has[i] ? m.patients : null));
-    const sit = d.months.map((m, i) => (has[i] ? m.sittings : null));
-    const perPatient = (i) => (d.months[i].patients ? (d.months[i].sittings / d.months[i].patients).toFixed(1) : '—');
-    // Machines with data this year, in configured order (a decommissioned machine appears only in its years).
-    const machines = machineNames.filter((m) => d.machines[m].patients.some((v) => v > 0) || d.machines[m].sittings.some((v) => v > 0));
-    const machMax = Math.max(1, ...machines.flatMap((m) => d.machines[m].patients));
-    const sum = (arr) => arr.reduce((x, y) => x + (y || 0), 0);
     setMain(`
       <div class="toolbar">
         <div><h1>Dashboard</h1><div class="sub">${esc(s.welcome || '')}</div></div>
@@ -188,103 +179,40 @@
       <div class="grid kpis">
         <div class="kpi"><div class="label">Total patients ${year}</div><div class="value">${fmt(d.totals.patients)}</div></div>
         <div class="kpi"><div class="label">Total sittings ${year}</div><div class="value">${fmt(d.totals.sittings)}</div></div>
-        <div class="kpi"><div class="label">Sittings per patient</div><div class="value">${d.totals.patients ? (d.totals.sittings / d.totals.patients).toFixed(1) : '—'}</div><div class="hint">average for the year</div></div>
         <div class="kpi"><div class="label">Total down time</div><div class="value">${minToHM(d.totals.downTimeMin)}</div><div class="hint">hours:minutes</div></div>
         <div class="kpi"><div class="label">Busiest month</div><div class="value">${busiest.v ? MONTHS[busiest.i].slice(0, 3) : '—'}</div><div class="hint">${busiest.v ? fmt(busiest.v) + ' patients' : 'No data yet'}</div></div>
+        <div class="kpi"><div class="label">Entries recorded</div><div class="value">${fmt(d.totals.entries)}</div><div class="hint">machine × shift × month</div></div>
       </div>
-
-      <div class="panel" style="margin-top:16px">
-        <h2>Patients and sittings per month</h2>
-        <div class="sub" style="margin:-6px 0 10px">Two charts on the same months; each has its own scale (sittings are about 16× patients).</div>
-        <div class="mini-title">Patients</div>
-        <div class="chart-box short"><canvas id="c-pat" aria-label="Bar chart: patients per month, ${year}" role="img"></canvas></div>
-        <div class="mini-title" style="margin-top:10px">Sittings</div>
-        <div class="chart-box short"><canvas id="c-sit" aria-label="Bar chart: sittings per month, ${year}" role="img"></canvas></div>
-        <details class="data-table"><summary>Show as table</summary>
-          <div class="table-wrap"><table class="fit">
-            <thead><tr><th></th>${labels.map((l) => `<th class="num">${l}</th>`).join('')}<th class="num">Total</th></tr></thead>
-            <tbody>
-              <tr><td class="tech">Patients</td>${pat.map((v) => `<td class="num">${v == null ? '' : fmt(v)}</td>`).join('')}<td class="num grand">${fmt(d.totals.patients)}</td></tr>
-              <tr><td class="tech">Sittings</td>${sit.map((v) => `<td class="num">${v == null ? '' : fmt(v)}</td>`).join('')}<td class="num grand">${fmt(d.totals.sittings)}</td></tr>
-              <tr class="meta"><td>Sittings / patient</td>${labels.map((l, i) => `<td class="num">${has[i] ? perPatient(i) : ''}</td>`).join('')}<td class="num">${d.totals.patients ? (d.totals.sittings / d.totals.patients).toFixed(1) : ''}</td></tr>
-            </tbody></table></div></details>
-      </div>
-
-      <div class="panel">
-        <h2>Patients per month by machine</h2>
-        <div class="sub" style="margin:-6px 0 10px">One chart per machine, all on the same scale, so heights compare across machines.</div>
-        <div class="multiples">
-          ${machines.map((m, i) => `<div class="multiple">
-            <div class="mini-title">${esc(m)} <span class="note">${fmt(sum(d.machines[m].patients))} patients</span></div>
-            <div class="chart-box tiny"><canvas id="c-m${i}" aria-label="Bar chart: ${esc(m)} patients per month" role="img"></canvas></div></div>`).join('') || '<div class="empty">No data for this year.</div>'}
-        </div>
-        <details class="data-table"><summary>Show as table</summary>
-          <div class="table-wrap"><table class="fit">
-            <thead><tr><th>Machine</th>${labels.map((l) => `<th class="num">${l}</th>`).join('')}<th class="num">Total</th></tr></thead>
-            <tbody>${machines.map((m) => `<tr><td class="tech">${esc(m)}</td>${d.machines[m].patients.map((v, i) => `<td class="num">${has[i] ? fmt(v) : ''}</td>`).join('')}<td class="num grand">${fmt(sum(d.machines[m].patients))}</td></tr>`).join('')}
-              <tr class="total"><td>Total</td>${pat.map((v) => `<td class="num">${v == null ? '' : fmt(v)}</td>`).join('')}<td class="num">${fmt(d.totals.patients)}</td></tr></tbody>
-          </table></div></details>
-      </div>
-
-      <div class="grid two">
-        <div class="panel"><h2>Patients by technique</h2><div class="chart-box"><canvas id="c-tech" aria-label="Bar chart: patients by technique, ${year}" role="img"></canvas></div></div>
+      <div class="grid two" style="margin-top:16px">
+        <div class="panel"><h2>Patients per month by machine</h2><div class="chart-box"><canvas id="c-patients"></canvas></div></div>
+        <div class="panel"><h2>Sittings per month</h2><div class="chart-box"><canvas id="c-sittings"></canvas></div></div>
+        <div class="panel"><h2>Patients by technique</h2><div class="chart-box"><canvas id="c-tech"></canvas></div></div>
         <div class="panel"><h2>Machine totals</h2>
           <div class="table-wrap"><table>
-            <thead><tr><th>Machine</th><th class="num">Patients</th><th class="num">Sittings</th><th class="num">Sittings / patient</th></tr></thead>
-            <tbody>${machines.map((m) => { const pp = sum(d.machines[m].patients), ss = sum(d.machines[m].sittings); return `<tr><td class="tech">${esc(m)}</td><td class="num">${fmt(pp)}</td><td class="num">${fmt(ss)}</td><td class="num">${pp ? (ss / pp).toFixed(1) : '—'}</td></tr>`; }).join('')}
-              <tr class="total"><td>Total</td><td class="num">${fmt(d.totals.patients)}</td><td class="num">${fmt(d.totals.sittings)}</td><td class="num">${d.totals.patients ? (d.totals.sittings / d.totals.patients).toFixed(1) : '—'}</td></tr></tbody>
+            <thead><tr><th>Machine</th><th class="num">Patients</th><th class="num">Sittings</th></tr></thead>
+            <tbody>${machineNames.map((m) => `<tr><td class="tech">${esc(m)}</td><td class="num">${fmt(d.machines[m].patients.reduce((a, b) => a + b, 0))}</td><td class="num">${fmt(d.machines[m].sittings.reduce((a, b) => a + b, 0))}</td></tr>`).join('')}
+              <tr class="total"><td>Total</td><td class="num">${fmt(d.totals.patients)}</td><td class="num">${fmt(d.totals.sittings)}</td></tr></tbody>
           </table></div>
         </div>
       </div>
     `);
     $('#dash-year').onchange = (e) => { location.hash = '#/dashboard/' + e.target.value; };
-
-    // Bar styling (dataviz spec): one validated hue, rounded data-end, gaps between bars, recessive grid,
-    // hover tooltip on every bar with a hit area wider than the bar.
-    const BAR = '#12a5b4', BAR_HOVER = '#3cc4d1';
-    const barSet = (data, label) => ({ label, data, backgroundColor: BAR, hoverBackgroundColor: BAR_HOVER,
-      borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: 'start', categoryPercentage: 0.82, barPercentage: 0.88 });
-    const axes = (yMax, step, allX) => ({
-      x: { grid: { display: false }, ticks: Object.assign({ color: '#a9c7cd' }, allX ? { autoSkip: false, maxRotation: 0, font: { size: 10 } } : {}) },
-      y: { beginAtZero: true, max: yMax, grid: { color: 'rgba(169,199,205,.12)' }, border: { display: false },
-        ticks: Object.assign({ color: '#a9c7cd', maxTicksLimit: 5, callback: (v) => fmt(v) }, step ? { stepSize: step } : {}) }
+    const labels = MONTHS.map((m) => m.slice(0, 3));
+    chart($('#c-patients'), {
+      type: 'bar',
+      data: { labels, datasets: machineNames.map((m, i) => ({ label: m, data: d.machines[m].patients, backgroundColor: MACHINE_COLORS[i % MACHINE_COLORS.length], borderRadius: 3 })) },
+      options: { maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }, plugins: { legend: { position: 'bottom' } } }
     });
-    const base = (extraTooltip) => ({
-      maintainAspectRatio: false, animation: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { display: false }, tooltip: Object.assign({ displayColors: false, padding: 10 }, extraTooltip || {}) }
-    });
-    const monthTip = {
-      callbacks: {
-        title: (it) => `${MONTHS[it[0].dataIndex]} ${year}`,
-        label: (it) => [`Patients: ${fmt(d.months[it.dataIndex].patients)}`, `Sittings: ${fmt(d.months[it.dataIndex].sittings)}`, `Sittings per patient: ${perPatient(it.dataIndex)}`]
-      }
-    };
-    chart($('#c-pat'), { type: 'bar', data: { labels, datasets: [barSet(pat, 'Patients')] }, options: Object.assign(base(monthTip), { scales: axes() }) });
-    chart($('#c-sit'), { type: 'bar', data: { labels, datasets: [barSet(sit, 'Sittings')] }, options: Object.assign(base(monthTip), { scales: axes() }) });
-    // Shared scale for all machine charts, in four even steps (e.g. 0, 40, 80, 120, 160).
-    const step = [10, 20, 25, 30, 40, 50, 60, 75, 100, 125, 150, 200, 250, 500].find((x) => x * 4 >= machMax) || Math.ceil(machMax / 4);
-    const niceMax = step * 4;
-    machines.forEach((m, i) => {
-      chart($('#c-m' + i), {
-        type: 'bar',
-        data: { labels: labels.map((l) => l.charAt(0)), datasets: [barSet(d.machines[m].patients.map((v, k) => (has[k] ? v : null)), m)] },
-        options: Object.assign(base({
-          callbacks: {
-            title: (it) => `${m} · ${MONTHS[it[0].dataIndex]} ${year}`,
-            label: (it) => [`Patients: ${fmt(d.machines[m].patients[it.dataIndex])}`, `Sittings: ${fmt(d.machines[m].sittings[it.dataIndex])}`]
-          }
-        }), { scales: axes(niceMax, step, true) })
-      });
+    chart($('#c-sittings'), {
+      type: 'line',
+      data: { labels, datasets: [{ label: 'Sittings', data: d.months.map((m) => m.sittings), borderColor: '#ffff00', backgroundColor: 'rgba(255,255,0,.12)', fill: true, tension: .3, pointRadius: 3 }] },
+      options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }
     });
     const techs = state.cfg.techniques;
     chart($('#c-tech'), {
       type: 'bar',
-      data: { labels: techs.map((t) => t.label), datasets: [Object.assign(barSet(techs.map((t) => d.techniques[t.key] || 0), 'Patients'), { borderRadius: { topRight: 4, bottomRight: 4 } })] },
-      options: Object.assign(base({ callbacks: { label: (it) => `Patients: ${fmt(it.raw)}` } }), {
-        indexAxis: 'y', interaction: { mode: 'nearest', axis: 'y', intersect: false },
-        scales: { x: { beginAtZero: true, grid: { color: 'rgba(169,199,205,.12)' }, border: { display: false }, ticks: { color: '#a9c7cd', callback: (v) => fmt(v) } }, y: { grid: { display: false }, ticks: { color: '#a9c7cd' } } }
-      })
+      data: { labels: techs.map((t) => t.label), datasets: [{ label: 'Patients', data: techs.map((t) => d.techniques[t.key] || 0), backgroundColor: '#00ffff', borderRadius: 3 }] },
+      options: { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { beginAtZero: true } }, plugins: { legend: { display: false } } }
     });
   }
 

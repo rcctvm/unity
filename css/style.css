@@ -93,15 +93,6 @@ table.info td { white-space: normal; }
 .kpi .value { font-size: 28px; font-weight: 700; color: var(--yellow); font-variant-numeric: tabular-nums; }
 .kpi .hint { color: var(--muted); font-size: 12px; }
 .chart-box { position: relative; height: 300px; }
-.chart-box.short { height: 190px; }
-.chart-box.tiny { height: 150px; }
-.mini-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
-.mini-title .note { font-weight: 400; margin-left: 6px; }
-.multiples { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px 18px; }
-.multiple { min-width: 0; background: var(--cell); border: 1px solid var(--line); border-radius: 8px; padding: 10px 10px 6px; }
-details.data-table { margin-top: 12px; }
-details.data-table > summary { cursor: pointer; color: var(--cyan); font-size: 13px; }
-details.data-table[open] > summary { margin-bottom: 8px; }
 
 /* Toolbar / forms */
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 14px; }
