@@ -252,7 +252,7 @@
       type: 'bar',
       data: { labels, datasets: machineNames.map((m, i) => ({ label: m, data: gap(d.machines[m].patients), backgroundColor: MACHINE_COLORS[i % MACHINE_COLORS.length], borderRadius: 3 })) },
       options: { maintainAspectRatio: false, layout: { padding: { top: 16 } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
-        plugins: { legend: { position: 'bottom' }, valueLabels: { mode: 'stack' } } }
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 9, boxHeight: 9, padding: 6, font: { size: 11 } } }, valueLabels: { mode: 'stack' } } }
     });
     chart($('#c-sittings'), {
       type: 'line',
